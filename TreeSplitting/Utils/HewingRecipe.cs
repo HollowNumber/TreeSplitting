@@ -89,14 +89,17 @@ namespace TreeSplitting.Utils
         /// Checks if the item the player is holding is valid for this recipe.
         /// Handles wildcards (e.g. log-oak-ud matches log-*-ud).
         /// </summary>
-        public bool Matches(IWorldAccessor worldAccessor,ItemStack? inputStack)
+        public bool Matches(IWorldAccessor worldAccessor, ItemStack inputStack)
         {
             if (inputStack == null) return false;
 
-            // Simple Exact Match
-            if (Ingredient.Matches(worldAccessor, inputStack)) return true;
+            // FIX: Only use the built-in Matches if we successfully resolved a specific item earlier.
+            if (Ingredient.ResolvedItemstack != null)
+            {
+                if (Ingredient.Matches(worldAccessor, inputStack)) return true;
+            }
 
-            // Wildcard Match (if the JSON used *)
+            // If it was a wildcard recipe (and thus not resolved), we MUST use wildcard matching.
             if (Ingredient.Code.Path.Contains("*"))
             {
                 return WildcardUtil.Match(Ingredient.Code, inputStack.Collectible.Code);

@@ -1,0 +1,28 @@
+﻿{
+  "editor": {
+    "allAngles": false,
+    "singleTexture": false
+  },
+  "textureWidth": 16,
+  "textureHeight": 16,
+  "textures": {
+    "bark": "game:block/wood/log/oak/bark",
+    "up": "game:block/wood/log/oak/top",
+    "down": "game:block/wood/log/oak/top"
+  },
+  "elements": [
+    {
+      "name": "stump",
+      "from": [ 0.0, 0.0, 0.0 ],
+      "to": [ 16.0, 10.0, 16.0 ],
+      "faces": {
+        "north": { "texture": "#bark", "uv": [ 0.0, 0.0, 16.0, 10.0 ] },
+        "east": { "texture": "#bark", "uv": [ 0.0, 0.0, 16.0, 10.0 ] },
+        "south": { "texture": "#bark", "uv": [ 0.0, 0.0, 16.0, 10.0 ] },
+        "west": { "texture": "#bark", "uv": [ 0.0, 0.0, 16.0, 10.0 ] },
+        "up": { "texture": "#up", "uv": [ 0.0, 0.0, 16.0, 16.0 ] },
+        "down": { "texture": "#down", "uv": [ 0.0, 0.0, 16.0, 16.0 ] }
+      }
+    }
+  ]
+}

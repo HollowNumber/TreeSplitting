@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using TreeSplitting.Utils; // Assuming this is where HewingRecipe/System is
+using TreeSplitting.Rendering;
+using TreeSplitting.Utils;
+using Vintagestory.API.Client; // Assuming this is where HewingRecipe/System is
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
@@ -24,10 +26,10 @@ namespace TreeSplitting.BlockEntities
         public ItemStack? WorkItemStack;
         public AssetLocation? SelectedRecipeCode;
         public HewingRecipe? SelectedRecipe; // Runtime only
-        
+
         // Visuals
         public Cuboidf?[] SelectionBoxes = new Cuboidf[0];
-        // WoodWorkItemRenderer renderer; // You will implement this later
+        WoodWorkItemRenderer renderer; // You will implement this later
 
         public override void Initialize(ICoreAPI api)
         {
@@ -40,7 +42,10 @@ namespace TreeSplitting.BlockEntities
 
             if (api.Side == EnumAppSide.Client)
             {
-                // renderer = new WoodWorkItemRenderer(this, Pos, api as ICoreClientAPI);
+                renderer = new WoodWorkItemRenderer(this, Pos, api as ICoreClientAPI);
+
+                (api as ICoreClientAPI)?.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque);
+
                 RegenSelectionBoxes();
             }
         }
@@ -49,7 +54,20 @@ namespace TreeSplitting.BlockEntities
         {
             base.ToTreeAttributes(tree);
             tree.SetItemstack("workItem", WorkItemStack);
-            tree.SetBytes("voxels", SerializerUtil.Serialize(Voxels));
+    
+            // FLATTEN 3D Array -> 1D Array
+            if (Voxels != null)
+            {
+                byte[] flatVoxels = new byte[16 * 16 * 16];
+                int i = 0;
+                for (int x = 0; x < 16; x++)
+                for (int y = 0; y < 16; y++)
+                for (int z = 0; z < 16; z++)
+                    flatVoxels[i++] = Voxels[x, y, z];
+
+                tree.SetBytes("voxels", flatVoxels);
+            }
+
             if (SelectedRecipeCode != null) tree.SetString("recipeCode", SelectedRecipeCode.Path);
         }
 
@@ -57,14 +75,26 @@ namespace TreeSplitting.BlockEntities
         {
             base.FromTreeAttributes(tree, worldAccessForResolve);
             WorkItemStack = tree.GetItemstack("workItem");
-            
+    
             if (WorkItemStack != null)
             {
                 WorkItemStack.ResolveBlockOrItem(worldAccessForResolve);
-                Voxels = SerializerUtil.Deserialize<byte[,,]>(tree.GetBytes("voxels"));
+        
+                // UNFLATTEN 1D Array -> 3D Array
+                byte[] flatVoxels = tree.GetBytes("voxels");
+                if (flatVoxels != null && flatVoxels.Length == 4096)
+                {
+                    Voxels = new byte[16, 16, 16];
+                    int i = 0;
+                    for (int x = 0; x < 16; x++)
+                    for (int y = 0; y < 16; y++)
+                    for (int z = 0; z < 16; z++)
+                        Voxels[x, y, z] = flatVoxels[i++];
+                }
+        
                 string code = tree.GetString("recipeCode");
                 if (code != null) SelectedRecipeCode = new AssetLocation(code);
-                
+        
                 RegenSelectionBoxes();
             }
         }
@@ -83,7 +113,7 @@ namespace TreeSplitting.BlockEntities
             {
                 return TryTakeLog(byPlayer);
             }
-            
+
             return false;
         }
 
@@ -107,7 +137,7 @@ namespace TreeSplitting.BlockEntities
             // Find matching recipe
             // Passing Api.World here is crucial for the recipe wildcard check
             var recipe = TreeSplittingModSystem.Recipes.FirstOrDefault(r => r.Matches(Api.World, heldStack));
-            if (recipe == null) return false; 
+            if (recipe == null) return false;
 
             // 1. Move Item
             WorkItemStack = heldStack.Clone();
@@ -171,6 +201,11 @@ namespace TreeSplitting.BlockEntities
 
         private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player)
         {
+            // Safety Check
+            if (pos.X < 0 || pos.X >= 16 || 
+                pos.Y < 0 || pos.Y >= 16 || 
+                pos.Z < 0 || pos.Z >= 16) return;
+
             // Basic Chop Logic
             if (Voxels[pos.X, pos.Y, pos.Z] == (byte)EnumWoodMaterial.Empty) return;
 
@@ -180,7 +215,9 @@ namespace TreeSplitting.BlockEntities
             {
                 for (int i = 1; i <= 3; i++)
                 {
-                    if (pos.Y - i >= 0) Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
+                    // Safety check for the downward propagation too!
+                    if (pos.Y - i >= 0) 
+                        Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
                 }
             }
 
@@ -229,37 +266,38 @@ namespace TreeSplitting.BlockEntities
 
         private void RegenSelectionBoxes()
         {
+            if (Api?.Side == EnumAppSide.Client && renderer != null)
+            {
+                renderer.RegenMesh(WorkItemStack, Voxels);
+            }
+
             if (WorkItemStack == null)
             {
-                SelectionBoxes = new Cuboidf[0];
+                SelectionBoxes = [];
                 return;
             }
 
-            List<Cuboidf?> boxes = new List<Cuboidf?>();
-            
-            // Index 0 is reserved for the main block selection (null implies use block's default)
-            boxes.Add(null); 
+            List<Cuboidf> boxes = new List<Cuboidf>();
+            boxes.Add(null); // Index 0 = Stump
 
-            // Adjust this offset based on your Stump model height!
-            // If your stump is 10 pixels high, use 10f. If 0, use 0.
-            float yStart = 0f; // e.g. 10f / 16f for Anvil height
+            // 2. Fix the Offset (The wireframes)
+            float yStart = 10.0f;  // Matches stump height in choppingblock.json
 
             for (int x = 0; x < 16; x++)
             {
-                for (int y = 0; y < 16; y++) // Changed from 6 to 16 (Log height)
+                for (int y = 0; y < 16; y++)
                 {
                     for (int z = 0; z < 16; z++)
                     {
                         if (Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty)
                         {
-                            float py = y + yStart; 
-                            
-                            // Create box for this pixel
+                            float py = y + yStart;
+
                             boxes.Add(new Cuboidf(
-                                x / 16f, 
-                                py / 16f, 
-                                z / 16f, 
-                                x / 16f + 1 / 16f, 
+                                x / 16f,
+                                py / 16f,
+                                z / 16f,
+                                x / 16f + 1 / 16f,
                                 py / 16f + 1 / 16f,
                                 z / 16f + 1 / 16f
                             ));
@@ -269,6 +307,20 @@ namespace TreeSplitting.BlockEntities
             }
 
             SelectionBoxes = boxes.ToArray();
+        }
+
+        public override void OnBlockRemoved()
+        {
+            base.OnBlockRemoved();
+            
+            renderer?.Dispose();
+        }
+
+        public override void OnBlockUnloaded()
+        {
+            base.OnBlockUnloaded();
+            
+            renderer?.Dispose();
         }
     }
 }

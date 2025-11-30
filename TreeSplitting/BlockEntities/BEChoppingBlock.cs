@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TreeSplitting.Rendering;
 using TreeSplitting.Utils;
-using Vintagestory.API.Client; // Assuming this is where HewingRecipe/System is
+using Vintagestory.API.Client; 
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
@@ -19,25 +19,43 @@ namespace TreeSplitting.BlockEntities
         Bark = 3,
     }
 
+    public enum EnumToolMode : byte
+    {
+        Chop = 0,
+        Precise = 1,
+    }
+
     public class BEChoppingBlock : BlockEntity
     {
         // Data
         public byte[,,] Voxels = new byte[16, 16, 16];
+        
+        // NEW: Target Voxels for Green Highlight (Matches Renderer Expectation)
+        public byte[,,] TargetVoxels = null;
+
         public ItemStack? WorkItemStack;
         public AssetLocation? SelectedRecipeCode;
         public HewingRecipe? SelectedRecipe; // Runtime only
 
         // Visuals
-        public Cuboidf?[] SelectionBoxes = new Cuboidf[0];
-        WoodWorkItemRenderer renderer; // You will implement this later
+        public Cuboidf[] SelectionBoxes = new Cuboidf[0];
+        public Cuboidf[] CollisionBoxes = new Cuboidf[0];
+        WoodWorkItemRenderer renderer; 
 
         public override void Initialize(ICoreAPI api)
         {
             base.Initialize(api);
 
+            // Re-Link Recipe on Load
             if (SelectedRecipeCode != null)
             {
                 SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
+                
+                // Re-Generate Target Voxels for Visuals
+                if (SelectedRecipe != null)
+                {
+                    GenerateTargetVoxels();
+                }
             }
 
             if (api.Side == EnumAppSide.Client)
@@ -93,13 +111,41 @@ namespace TreeSplitting.BlockEntities
                 }
         
                 string code = tree.GetString("recipeCode");
-                if (code != null) SelectedRecipeCode = new AssetLocation(code);
+                if (code != null) 
+                {
+                    SelectedRecipeCode = new AssetLocation(code);
+                    SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
+                    
+                    Api.Logger.Debug($"Resolved Recipe {SelectedRecipeCode} for Chopping Block at {Pos}");
+                    
+                    if (SelectedRecipe != null) GenerateTargetVoxels();
+                }
         
                 RegenSelectionBoxes();
             }
         }
 
-        // Called by BlockChoppingBlock.OnBlockInteractStart
+        // Helper to convert Recipe Booleans to Target Bytes
+        private void GenerateTargetVoxels()
+        {
+            if (SelectedRecipe == null) return;
+            
+            this.TargetVoxels = new byte[16, 16, 16];
+            for (int x = 0; x < 16; x++)
+            {
+                for (int y = 0; y < 16; y++)
+                {
+                    for (int z = 0; z < 16; z++)
+                    {
+                        if (SelectedRecipe.Voxels[x, y, z])
+                        {
+                            this.TargetVoxels[x, y, z] = 1;
+                        }
+                    }
+                }
+            }
+        }
+
         public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
         {
             // CASE A: Placing a log (Shift + Right Click with Log)
@@ -116,17 +162,12 @@ namespace TreeSplitting.BlockEntities
 
             return false;
         }
+        
 
-        // Called by BlockChoppingBlock.OnBlockInteractStart (or a specific packet)
-        public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing)
+        public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode)
         {
             if (WorkItemStack == null) return;
-
-            // Check for Axe
-            Item? heldItem = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Item;
-            if (heldItem is not { Tool: EnumTool.Axe }) return;
-
-            OnChop(voxelPos, facing, byPlayer);
+            OnChop(voxelPos, facing, byPlayer, toolMode);
         }
 
         private bool TryPutLog(IPlayer byPlayer)
@@ -135,7 +176,6 @@ namespace TreeSplitting.BlockEntities
             if (heldStack == null) return false;
 
             // Find matching recipe
-            // Passing Api.World here is crucial for the recipe wildcard check
             var recipe = TreeSplittingModSystem.Recipes.FirstOrDefault(r => r.Matches(Api.World, heldStack));
             if (recipe == null) return false;
 
@@ -148,6 +188,7 @@ namespace TreeSplitting.BlockEntities
             SelectedRecipe = recipe;
             SelectedRecipeCode = recipe.Code;
             GenerateLogVoxels();
+            GenerateTargetVoxels(); // Prepare overlay
 
             // 3. Update
             RegenSelectionBoxes();
@@ -171,6 +212,7 @@ namespace TreeSplitting.BlockEntities
             SelectedRecipe = null;
             SelectedRecipeCode = null;
             Voxels = new byte[16, 16, 16];
+            TargetVoxels = null; // Clear overlay
 
             RegenSelectionBoxes();
             MarkDirty();
@@ -199,27 +241,30 @@ namespace TreeSplitting.BlockEntities
             }
         }
 
-        private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player)
+        private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player, EnumToolMode toolMode)
         {
-            // Safety Check
             if (pos.X < 0 || pos.X >= 16 || 
                 pos.Y < 0 || pos.Y >= 16 || 
                 pos.Z < 0 || pos.Z >= 16) return;
 
-            // Basic Chop Logic
             if (Voxels[pos.X, pos.Y, pos.Z] == (byte)EnumWoodMaterial.Empty) return;
 
             Voxels[pos.X, pos.Y, pos.Z] = (byte)EnumWoodMaterial.Empty;
 
-            if (facing == BlockFacing.UP)
+            if (toolMode == EnumToolMode.Precise) // Chop or Cleave
             {
-                for (int i = 1; i <= 3; i++)
+                // Simple downward force logic
+                if (facing == BlockFacing.UP)
                 {
-                    // Safety check for the downward propagation too!
-                    if (pos.Y - i >= 0) 
-                        Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
+                    for (int i = 1; i <= 3; i++)
+                        if (pos.Y - i >= 0) Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
                 }
+                
+                // TODO: Add the more complex logic for precise
             }
+
+            // Add sound/particles here if desired
+            Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
 
             CheckIfFinished(player);
             RegenSelectionBoxes();
@@ -239,6 +284,10 @@ namespace TreeSplitting.BlockEntities
                         bool recipeNeedsWood = SelectedRecipe.Voxels[x, y, z];
                         bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
 
+                        // If recipe needs wood and we have none -> Failed/Ruined? 
+                        // Or if recipe needs NO wood and we have it -> Not Finished.
+                        
+                        // For "Completion", we usually check: Does the current shape MATCH the target?
                         if (recipeNeedsWood != hasWood) return;
                     }
                 }
@@ -253,12 +302,16 @@ namespace TreeSplitting.BlockEntities
                 {
                     Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
                 }
+                
+                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
             }
 
+            // Reset
             WorkItemStack = null;
             SelectedRecipe = null;
             SelectedRecipeCode = null;
             Voxels = new byte[16, 16, 16];
+            TargetVoxels = null;
 
             RegenSelectionBoxes();
             MarkDirty();
@@ -266,22 +319,23 @@ namespace TreeSplitting.BlockEntities
 
         private void RegenSelectionBoxes()
         {
+            // Update Renderer
             if (Api?.Side == EnumAppSide.Client && renderer != null)
             {
-                renderer.RegenMesh(WorkItemStack, Voxels);
+                renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels);
             }
 
             if (WorkItemStack == null)
             {
-                SelectionBoxes = [];
+                SelectionBoxes = new Cuboidf[0];
+                CollisionBoxes = new Cuboidf[0];
                 return;
             }
 
             List<Cuboidf> boxes = new List<Cuboidf>();
-            boxes.Add(null); // Index 0 = Stump
-
-            // 2. Fix the Offset (The wireframes)
-            float yStart = 10.0f;  // Matches stump height in choppingblock.json
+            boxes.Add(new Cuboidf(0, 0, 0, 1, 10f/16f, 1));  // Stump
+            
+            float yStart = 10.0f;
 
             for (int x = 0; x < 16; x++)
             {
@@ -293,13 +347,14 @@ namespace TreeSplitting.BlockEntities
                         {
                             float py = y + yStart;
 
+                            // Create selection box for voxel
                             boxes.Add(new Cuboidf(
                                 x / 16f,
                                 py / 16f,
                                 z / 16f,
-                                x / 16f + 1 / 16f,
-                                py / 16f + 1 / 16f,
-                                z / 16f + 1 / 16f
+                                (x + 1) / 16f,
+                                (py + 1) / 16f,
+                                (z + 1) / 16f
                             ));
                         }
                     }
@@ -307,19 +362,18 @@ namespace TreeSplitting.BlockEntities
             }
 
             SelectionBoxes = boxes.ToArray();
+            CollisionBoxes = boxes.ToArray();
         }
 
         public override void OnBlockRemoved()
         {
             base.OnBlockRemoved();
-            
             renderer?.Dispose();
         }
 
         public override void OnBlockUnloaded()
         {
             base.OnBlockUnloaded();
-            
             renderer?.Dispose();
         }
     }

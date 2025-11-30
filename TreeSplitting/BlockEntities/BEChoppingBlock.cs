@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TreeSplitting.Rendering;
 using TreeSplitting.Utils;
-using Vintagestory.API.Client; 
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
@@ -29,7 +29,7 @@ namespace TreeSplitting.BlockEntities
     {
         // Data
         public byte[,,] Voxels = new byte[16, 16, 16];
-        
+
         // NEW: Target Voxels for Green Highlight (Matches Renderer Expectation)
         public byte[,,] TargetVoxels = null;
 
@@ -40,7 +40,7 @@ namespace TreeSplitting.BlockEntities
         // Visuals
         public Cuboidf[] SelectionBoxes = new Cuboidf[0];
         public Cuboidf[] CollisionBoxes = new Cuboidf[0];
-        WoodWorkItemRenderer renderer; 
+        WoodWorkItemRenderer renderer;
 
         public override void Initialize(ICoreAPI api)
         {
@@ -50,7 +50,7 @@ namespace TreeSplitting.BlockEntities
             if (SelectedRecipeCode != null)
             {
                 SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
-                
+
                 // Re-Generate Target Voxels for Visuals
                 if (SelectedRecipe != null)
                 {
@@ -72,7 +72,7 @@ namespace TreeSplitting.BlockEntities
         {
             base.ToTreeAttributes(tree);
             tree.SetItemstack("workItem", WorkItemStack);
-    
+
             // FLATTEN 3D Array -> 1D Array
             if (Voxels != null)
             {
@@ -93,11 +93,11 @@ namespace TreeSplitting.BlockEntities
         {
             base.FromTreeAttributes(tree, worldAccessForResolve);
             WorkItemStack = tree.GetItemstack("workItem");
-    
+
             if (WorkItemStack != null)
             {
                 WorkItemStack.ResolveBlockOrItem(worldAccessForResolve);
-        
+
                 // UNFLATTEN 1D Array -> 3D Array
                 byte[] flatVoxels = tree.GetBytes("voxels");
                 if (flatVoxels != null && flatVoxels.Length == 4096)
@@ -109,27 +109,33 @@ namespace TreeSplitting.BlockEntities
                     for (int z = 0; z < 16; z++)
                         Voxels[x, y, z] = flatVoxels[i++];
                 }
-        
+
                 string code = tree.GetString("recipeCode");
-                if (code != null) 
+                if (code != null)
                 {
                     SelectedRecipeCode = new AssetLocation(code);
                     SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
-                    
+
                     Api.Logger.Debug($"Resolved Recipe {SelectedRecipeCode} for Chopping Block at {Pos}");
-                    
+
                     if (SelectedRecipe != null) GenerateTargetVoxels();
                 }
-        
-                RegenSelectionBoxes();
             }
+            else
+            {
+                Voxels = new byte[16, 16, 16];
+                SelectedRecipe = null;
+                TargetVoxels = null;
+            }
+
+            RegenSelectionBoxes();
         }
 
         // Helper to convert Recipe Booleans to Target Bytes
         private void GenerateTargetVoxels()
         {
             if (SelectedRecipe == null) return;
-            
+
             this.TargetVoxels = new byte[16, 16, 16];
             for (int x = 0; x < 16; x++)
             {
@@ -162,7 +168,7 @@ namespace TreeSplitting.BlockEntities
 
             return false;
         }
-        
+
 
         public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode)
         {
@@ -243,8 +249,8 @@ namespace TreeSplitting.BlockEntities
 
         private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player, EnumToolMode toolMode)
         {
-            if (pos.X < 0 || pos.X >= 16 || 
-                pos.Y < 0 || pos.Y >= 16 || 
+            if (pos.X < 0 || pos.X >= 16 ||
+                pos.Y < 0 || pos.Y >= 16 ||
                 pos.Z < 0 || pos.Z >= 16) return;
 
             if (Voxels[pos.X, pos.Y, pos.Z] == (byte)EnumWoodMaterial.Empty) return;
@@ -257,23 +263,62 @@ namespace TreeSplitting.BlockEntities
                 if (facing == BlockFacing.UP)
                 {
                     for (int i = 1; i <= 3; i++)
-                        if (pos.Y - i >= 0) Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
+                        if (pos.Y - i >= 0)
+                            Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
                 }
-                
+
                 // TODO: Add the more complex logic for precise
             }
 
+            if (facing == BlockFacing.UP)
+            {
+                double playerX = player.Entity.Pos.X;
+                double playerZ = player.Entity.Pos.Z;
+                double blockCenterX = Pos.X + 0.5;
+                double blockCenterZ = Pos.Z + 0.5;
+
+                double dx = playerX - blockCenterX;
+                double dz = playerZ - blockCenterZ;
+
+                if (Math.Abs(dx) > Math.Abs(dz))
+                {
+                    // Player is East/West -> cleave along Z (vary z), keep X fixed
+                    for (int x = 0; x < 16; x++)
+                    {
+                        for (int y = pos.Y; y >= 0; y--)
+                        {
+                            Voxels[x, y, pos.Z] = (byte)EnumWoodMaterial.Empty;
+                        }
+                    }
+                }
+                else
+                {
+                    // Player is North/South -> cleave along X (vary x), keep Z fixed
+                    for (int z = 0; z < 16; z++)
+                    {
+                        for (int y = pos.Y; y >= 0; y--)
+                        {
+                            Voxels[pos.X, y, z] = (byte)EnumWoodMaterial.Empty;
+                        }
+                    }
+                }
+            }
+
             // Add sound/particles here if desired
-            Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
+            //Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
+
 
             CheckIfFinished(player);
             RegenSelectionBoxes();
-            MarkDirty();
+            MarkDirty(true);
         }
 
         private void CheckIfFinished(IPlayer player)
         {
             if (SelectedRecipe == null) return;
+
+            bool ruined = false;
+            bool finished = true;
 
             for (int x = 0; x < 16; x++)
             {
@@ -284,35 +329,54 @@ namespace TreeSplitting.BlockEntities
                         bool recipeNeedsWood = SelectedRecipe.Voxels[x, y, z];
                         bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
 
-                        // If recipe needs wood and we have none -> Failed/Ruined? 
-                        // Or if recipe needs NO wood and we have it -> Not Finished.
-                        
-                        // For "Completion", we usually check: Does the current shape MATCH the target?
-                        if (recipeNeedsWood != hasWood) return;
+                        if (recipeNeedsWood && !hasWood)
+                        {
+                            // We chopped a block that was needed! Ruined!
+                            ruined = true;
+                        }
+
+                        if (!recipeNeedsWood && hasWood)
+                        {
+                            // We still have wood that needs to be removed.
+                            finished = false;
+                        }
                     }
                 }
             }
 
-            // Finished!
-            if (WorkItemStack != null)
+            if (ruined)
             {
-                ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
-
-                if (!player.InventoryManager.TryGiveItemstack(result))
-                {
-                    Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
-                }
-                
-                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
+                // Drop Firewood? Or just clear?
+                Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), 2),
+                    Pos.ToVec3d().Add(0.5, 1, 0.5));
+                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
+                ResetBlock();
+                return;
             }
 
-            // Reset
+            if (finished)
+            {
+                // Success!
+                if (WorkItemStack != null)
+                {
+                    ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
+                    if (!player.InventoryManager.TryGiveItemstack(result))
+                        Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+
+                    Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
+                }
+
+                ResetBlock();
+            }
+        }
+
+        private void ResetBlock()
+        {
             WorkItemStack = null;
             SelectedRecipe = null;
             SelectedRecipeCode = null;
             Voxels = new byte[16, 16, 16];
             TargetVoxels = null;
-
             RegenSelectionBoxes();
             MarkDirty();
         }
@@ -333,8 +397,8 @@ namespace TreeSplitting.BlockEntities
             }
 
             List<Cuboidf> boxes = new List<Cuboidf>();
-            boxes.Add(new Cuboidf(0, 0, 0, 1, 10f/16f, 1));  // Stump
-            
+            boxes.Add(new Cuboidf(0, 0, 0, 1, 10f / 16f, 1)); // Stump
+
             float yStart = 10.0f;
 
             for (int x = 0; x < 16; x++)

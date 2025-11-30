@@ -7,7 +7,7 @@
   },
   "output": {
     "type": "block",
-    "code": "game:woodenbeam-{wood}-ud",
+    "code": "game:supportbeam-{wood}",
     "stackSize": 1
   },
   "pattern": [

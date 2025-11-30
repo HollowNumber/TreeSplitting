@@ -57,7 +57,9 @@ public class TreeSplittingModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         base.StartClientSide(api);
-
+        
+        clientChannel = api.Network.GetChannel("treesplitting");
+        
         api.Event.MouseDown += OnClientMouseDown;
     }
 
@@ -81,7 +83,60 @@ public class TreeSplittingModSystem : ModSystem
         }
     }
 
-    private void OnClientMouseDown(MouseEvent e)
+    private void OnClientMouseDown(MouseEvent args)
     {
+        if (args.Button != EnumMouseButton.Left) return;
+
+        ICoreClientAPI capi = (ICoreClientAPI)api;
+        if (capi.World.Player == null) return;
+        
+        // 2. Raycast
+        BlockSelection sel = capi.World.Player.CurrentBlockSelection;
+        if (sel == null) return;
+
+        Block block = capi.World.BlockAccessor.GetBlock(sel.Position);
+        
+        // 3. Is it our block?
+        if (block is BlockChoppingBlock || block is BlockChoppingBlockTop)
+        {
+            // 4. Check Axe
+            ItemStack held = capi.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack;
+            if (held?.Item?.Tool != EnumTool.Axe) return; 
+
+            BlockPos bePos = sel.Position;
+            if (block is BlockChoppingBlockTop) bePos = bePos.DownCopy();
+            
+            BEChoppingBlock be = capi.World.BlockAccessor.GetBlockEntity(bePos) as BEChoppingBlock;
+            if (be == null) return;
+
+            // Index 0 is Stump. We let vanilla break stump if they hit it.
+            if (sel.SelectionBoxIndex > 0 && sel.SelectionBoxIndex < be.SelectionBoxes.Length)
+            {
+                // INTERCEPT!
+                args.Handled = true; 
+                
+                // Calculate Voxel Coords locally
+                Cuboidf box = be.SelectionBoxes[sel.SelectionBoxIndex];
+                int x = (int)(box.X1 * 16);
+                int y = (int)((box.Y1 * 16) - 10); 
+                int z = (int)(box.Z1 * 16);
+
+                // Get Tool Mode
+                EnumToolMode mode = (EnumToolMode)held.Attributes.GetInt("toolMode", 0);
+
+                // Send Packet
+                clientChannel.SendPacket(new ChopPacket()
+                {
+                    Pos = bePos,
+                    VoxelX = x,
+                    VoxelY = y,
+                    VoxelZ = z,
+                    FaceIndex = sel.Face.Index,
+                    ToolMode = mode
+                });
+                
+                capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), bePos.X, bePos.Y, bePos.Z, null);
+            }
+        }
     }
 }

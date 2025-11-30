@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
@@ -6,8 +9,7 @@ namespace TreeSplitting.Utils
 {
     public class HewingRecipe
     {
-        // -- JSON Loaded Fields --
-        
+
         // The unique ID (filename)
         public AssetLocation Code;
 
@@ -58,7 +60,7 @@ namespace TreeSplitting.Utils
                     if (z >= rows.Length) break; // Safety check
 
                     string row = rows[z];
-                    
+
                     // Loop X (Characters)
                     for (int x = 0; x < 16; x++)
                     {
@@ -112,35 +114,121 @@ namespace TreeSplitting.Utils
         /// Generates the correct output stack.
         /// Handles replacing {wood} with the actual wood type.
         /// </summary>
+
         public ItemStack GenerateOutput(ItemStack inputStack, IWorldAccessor world)
         {
-            // 1. Start with the base output
-            ItemStack finalOutput = Output.ResolvedItemstack.Clone();
-
-            // 2. Handle Wildcard Replacement
-            // If input was "log-oak-ud" and recipe was "log-*-ud"
-            // We need to find "oak" and put it into "beam-{wood}-ud"
-            if (Ingredient.Code.Path.Contains("*") && Output.Code.Path.Contains("{"))
+            if (world == null) return null;
+            if (inputStack == null)
             {
-                string code = inputStack.Collectible.Code.Path;
-                string pattern = Ingredient.Code.Path;
-                
-                // Extract the variable part (e.g. "oak")
-                string extractedType = WildcardUtil.GetWildcardValue(new AssetLocation(pattern), new AssetLocation(code));
-
-                // Inject it into output code
-                string newOutputCode = Output.Code.Path.Replace("{wood}", extractedType).Replace("{type}", extractedType); // Handle generic names
-
-                // Create new item stack from the specific block/item
-                var blockOrItem = world.GetBlock(new AssetLocation(newOutputCode)) ?? (CollectibleObject)world.GetItem(new AssetLocation(newOutputCode));
-                
-                if (blockOrItem != null)
+                world.Logger.Warning("HewingRecipe.GenerateOutput called with null inputStack");
+                return null;
+            }
+        
+            try
+            {
+                string outputTemplate = Output?.Code?.ToString();
+                if (string.IsNullOrEmpty(outputTemplate))
                 {
-                    finalOutput = new ItemStack(blockOrItem, Output.StackSize);
+                    world.Logger.Warning(
+                        "HewingRecipe.GenerateOutput: recipe {0} Output.Code template is missing (Output.Code: {1})",
+                        this.Code?.ToString() ?? "<null>",
+                        outputTemplate ?? "<null>"
+                    );
+                    return null;
                 }
+        
+                string inputCode = null;
+                if (inputStack.Collectible != null && inputStack.Collectible.Code != null)
+                {
+                    inputCode = inputStack.Collectible.Code.Path;
+                }
+                else if (inputStack.Block != null && inputStack.Block.Code != null)
+                {
+                    inputCode = inputStack.Block.Code.Path;
+                }
+        
+                if (string.IsNullOrEmpty(inputCode))
+                {
+                    world.Logger.Warning(
+                        "HewingRecipe.GenerateOutput: cannot determine input stack code for recipe {0}",
+                        this.Code ?? "<null>");
+                    return null;
+                }
+        
+                // Use the helper to robustly pick the wood name (e.g. "birch" from "log-placed-birch-ud")
+                string woodName = ExtractWoodName(inputCode);
+                if (string.IsNullOrEmpty(woodName))
+                {
+                    world.Logger.Warning(
+                        "HewingRecipe.GenerateOutput: failed to extract wood identifier from '{0}' for recipe {1}",
+                        inputCode, this.Code ?? "<null>");
+                    return null;
+                }
+        
+                // Replace the token `"{wood}"` and resolve
+                string finalCode = outputTemplate.Replace("{wood}", woodName);
+        
+                world.Logger.Debug(
+                    "HewingRecipe.GenerateOutput: recipe={0}, outputTemplate={1}, inputCode={2}, woodName={3}, finalCode={4}",
+                    this.Code?.ToString() ?? "<null>",
+                    outputTemplate,
+                    inputCode,
+                    woodName,
+                    finalCode
+                );
+        
+                AssetLocation finalLoc;
+                try
+                {
+                    finalLoc = new AssetLocation(finalCode);
+                }
+                catch (Exception)
+                {
+                    world.Logger.Warning(
+                        "HewingRecipe.GenerateOutput: invalid output asset location '{0}' for recipe {1}", finalCode,
+                        this.Code ?? "<null>");
+                    return null;
+                }
+        
+                var block = world.GetBlock(finalLoc);
+                if (block != null && block.Code != null) return new ItemStack(block);
+        
+                var item = world.GetItem(finalLoc);
+                if (item != null && item.Code != null) return new ItemStack(item);
+        
+                world.Logger.Warning("HewingRecipe.GenerateOutput: could not resolve output asset '{0}' for recipe {1}",
+                    finalCode, this.Code ?? "<null>");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                world.Logger.Error("HewingRecipe.GenerateOutput threw: {0}\n{1}", ex.Message, ex.StackTrace);
+                return null;
+            }
+        }
+        
+        private string ExtractWoodName(string inputCode)
+        {
+            if (string.IsNullOrEmpty(inputCode)) return null;
+
+            var parts = inputCode.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+            var ignore = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "log", "placed", "planted", "ud", "ld", "u", "d", "placedlog"
+            };
+
+            foreach (var p in parts)
+            {
+                if (ignore.Contains(p)) continue;
+                if (p.All(char.IsDigit)) continue; // skip numeric segments
+                return p;
             }
 
-            return finalOutput;
+            // Fallbacks: regex like before, or last segment
+            var m = Regex.Match(inputCode, @"log[-_](.+?)(?:[-_]|$)", RegexOptions.IgnoreCase);
+            if (m.Success && m.Groups.Count > 1) return m.Groups[1].Value;
+
+            return parts.Length > 0 ? parts[parts.Length - 1] : null;
         }
     }
 }

@@ -117,7 +117,7 @@ namespace TreeSplitting.Rendering
                                 float yMin = py / 16f;
                                 float zMin = z / 16f;
                                 
-                                float expand = 0.002f; 
+                                float expand = 0.02f; 
                                 
                                 // Inline box generation for performance (avoiding GetCube allocations)
                                 AddWireframeBox(overlayMesh, 

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
 using TreeSplitting.Config;
@@ -37,11 +38,15 @@ public class TreeSplittingModSystem : ModSystem
         api.RegisterBlockEntityClass(modid + ".choppingblockentity", typeof(BEChoppingBlock));
         api.RegisterBlockClass(modid + ".choppingblocktop", typeof(BlockChoppingBlockTop));
         api.RegisterBlockClass(modid + ".choppingblock", typeof(BlockChoppingBlock));
+        
     }
 
     private static void LoadRecipes(ICoreAPI api)
     {
+        //Recipes.Clear();
+
         var recipes = api.Assets.GetMany<HewingRecipe>(api.Logger, "recipes/hewing");
+        
 
         foreach (var entry in recipes)
         {
@@ -51,6 +56,9 @@ public class TreeSplittingModSystem : ModSystem
             recipe.Resolve(api.World);
             Recipes.Add(recipe);
         }
+        
+        // Deduplicate
+        Recipes = Recipes.GroupBy(r => r.Code).Select(g => g.First()).ToList();
 
         api.Logger.Notification("Loaded {0} tree splitting recipes", Recipes.Count);
     }

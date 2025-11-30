@@ -67,7 +67,7 @@ namespace TreeSplitting.Blocks
 
             // Place the invisible Top Block at pos.Up()
             BlockPos upPos = blockPos.UpCopy();
-            Vintagestory.API.Common.Block topBlock = world.GetBlock(new AssetLocation("treesplitting:choppingblocktop"));
+            Block topBlock = world.GetBlock(new AssetLocation("treesplitting:choppingblocktop"));
             if (topBlock != null)
             {
                 world.BlockAccessor.SetBlock(topBlock.BlockId, upPos);
@@ -80,7 +80,7 @@ namespace TreeSplitting.Blocks
             
             // Remove Top Block if it exists
             BlockPos upPos = pos.UpCopy();
-            Vintagestory.API.Common.Block upBlock = world.BlockAccessor.GetBlock(upPos);
+            Block upBlock = world.BlockAccessor.GetBlock(upPos);
             if (upBlock.Code.Path == "choppingblocktop")
             {
                 world.BlockAccessor.SetBlock(0, upPos); // Set to Air
@@ -93,11 +93,6 @@ namespace TreeSplitting.Blocks
         {
             BEChoppingBlock? be = world.BlockAccessor.GetBlockEntity(blockSel.Position) as BEChoppingBlock;
             if (be == null) return base.OnBlockInteractStart(world, byPlayer, blockSel);
-
-            // Interaction logic is now mostly simplified to:
-            // 1. Shift+RightClick -> Place/Take (Handled in BE.OnInteract)
-            // 2. Left Click -> Chop (Handled via ModSystem Input Interception)
-            // 3. Right Click -> Do nothing? Or toggle something?
             
             // Delegate to BE
             return be.OnInteract(byPlayer, blockSel);

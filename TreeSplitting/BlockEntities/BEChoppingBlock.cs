@@ -7,6 +7,7 @@ using TreeSplitting.Rendering;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
@@ -45,13 +46,30 @@ namespace TreeSplitting.BlockEntities
         WoodWorkItemRenderer renderer;
         GuiDialogRecipeSelector dialog;
 
+        private static readonly AnimationMetaData AnimationMetaData = new AnimationMetaData()
+        {
+            Code = "axechop",
+            Animation = "axechop",
+            AnimationSpeed = 1.5f,
+            Weight = 10,
+            BlendMode = EnumAnimationBlendMode.Average,
+            EaseInSpeed = 999f, // Start immediately
+            EaseOutSpeed = 999f, // End immediately
+            TriggeredBy = new AnimationTrigger()
+            {
+                OnControls = new[] { EnumEntityActivity.Idle },
+                MatchExact = false
+            }
+        }.Init();
+
+
         public override void Initialize(ICoreAPI api)
         {
             base.Initialize(api);
 
             if (SelectedRecipeCode != null)
             {
-                SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
+                SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
 
                 // Re-Generate Target Voxels for Visuals
                 if (SelectedRecipe != null)
@@ -75,7 +93,6 @@ namespace TreeSplitting.BlockEntities
             base.ToTreeAttributes(tree);
             tree.SetItemstack("workItem", WorkItemStack);
 
-            // FLATTEN 3D Array -> 1D Array
             if (Voxels != null)
             {
                 byte[] flatVoxels = new byte[16 * 16 * 16];
@@ -88,7 +105,7 @@ namespace TreeSplitting.BlockEntities
                 tree.SetBytes("voxels", flatVoxels);
             }
 
-            if (SelectedRecipeCode != null) tree.SetString("recipeCode", SelectedRecipeCode.Path);
+            if (SelectedRecipeCode != null) tree.SetString("recipeCode", SelectedRecipeCode.ToString());
         }
 
         public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldAccessForResolve)
@@ -116,7 +133,8 @@ namespace TreeSplitting.BlockEntities
                 if (code != null)
                 {
                     SelectedRecipeCode = new AssetLocation(code);
-                    SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
+                    SelectedRecipe =
+                        TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
 
                     Api.Logger.Debug($"Resolved Recipe {SelectedRecipeCode} for Chopping Block at {Pos}");
 
@@ -131,8 +149,9 @@ namespace TreeSplitting.BlockEntities
             }
 
             RegenSelectionBoxes();
+            MarkDirty(true);
         }
-        
+
         public void SetSelectedRecipe(AssetLocation code)
         {
             SelectedRecipeCode = code;
@@ -166,6 +185,8 @@ namespace TreeSplitting.BlockEntities
                 // Allocate full 16x16x16 target (defaults to zeros)
                 this.TargetVoxels = new byte[16, 16, 16];
 
+                Api.Logger.Debug($"SelectedRecipe Voxels: {srcX}x{srcY}x{srcZ}");
+
                 // Copy only within the source and target bounds to avoid exceptions
                 int maxX = Math.Min(16, srcX);
                 int maxY = Math.Min(16, srcY);
@@ -184,12 +205,18 @@ namespace TreeSplitting.BlockEntities
                         }
                     }
                 }
+
+                Api.Logger.Debug(
+                    $"TargetVoxels: {TargetVoxels.GetLength(0)}x{TargetVoxels.GetLength(1)}x{TargetVoxels.GetLength(2)}");
             }
+
             catch (Exception ex)
             {
                 Api?.Logger?.Error("GenerateTargetVoxels failed: {0}\n{1}", ex.Message, ex.StackTrace);
                 TargetVoxels = null;
             }
+
+            MarkDirty(true);
         }
 
         public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
@@ -208,24 +235,35 @@ namespace TreeSplitting.BlockEntities
         private void OpenRecipeDialog(IPlayer player)
         {
             var capi = Api as ICoreClientAPI;
-            Api.Logger.Debug( $"Trying to open RecipeDialog" );
+            Api.Logger.Debug($"Trying to open RecipeDialog");
 
             if (capi == null || WorkItemStack == null) return;
 
-            var matching = TreeSplittingModSystem.Recipes
-                .Where(r => r.Matches(Api.World, WorkItemStack) && r.Output?.ResolvedItemstack != null)
-                .ToList();
-            
-            capi.Logger.Debug( $"Found {matching.Count} matching recipes");
+            var matching = new List<HewingRecipe>();
+            var stacks = new List<ItemStack>();
+
+            foreach (var recipe in TreeSplittingModSystem.Recipes)
+            {
+                if (recipe.Matches(Api.World, WorkItemStack))
+                {
+                    ItemStack outStack = recipe.GenerateOutput(WorkItemStack, Api.World);
+
+                    if (outStack != null)
+                    {
+                        matching.Add(recipe);
+                        stacks.Add(outStack);
+                    }
+                }
+            }
+
+            capi.Logger.Debug($"Found {matching.Count} matching recipes");
 
             if (matching.Count == 0) return;
 
-            var stacks = matching
-                .Select(r => r.Output?.ResolvedItemstack?.Clone())
-                .Where(stack => stack != null)
-                .ToList();
-            
-            var dialog = new GuiDialogRecipeSelector(capi, stacks,
+            // Don't declare 'var dialog', use the class field 'dialog' so we can close it later
+            if (dialog?.IsOpened() == true) dialog.TryClose();
+
+            dialog = new GuiDialogRecipeSelector(capi, stacks,
                 (selectedIndex) =>
                 {
                     if (selectedIndex >= 0 && selectedIndex < matching.Count)
@@ -237,8 +275,7 @@ namespace TreeSplitting.BlockEntities
                             RecipeCode = recipe.Code.ToString()
                         });
                     }
-                },
-                "Select Hewing Recipe"
+                }
             );
             dialog.TryOpen();
         }
@@ -364,6 +401,11 @@ namespace TreeSplitting.BlockEntities
             // Add sound/particles here if desired
             //Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
 
+            player.Entity.AnimManager.StartAnimation(AnimationMetaData);
+
+            Api.World.RegisterCallback((dt) => { player.Entity.AnimManager.StopAnimation(AnimationMetaData.Code); },
+                500);
+
 
             CheckIfFinished(player);
             RegenSelectionBoxes();
@@ -386,10 +428,18 @@ namespace TreeSplitting.BlockEntities
                         bool recipeNeedsWood = SelectedRecipe.Voxels[x, y, z];
                         bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
 
+                        //  Check if this voxel is actually within the log's radius
+                        double dist = Math.Sqrt(Math.Pow(x - 7.5, 2) + Math.Pow(z - 7.5, 2));
+                        bool insideLog = dist <= 7.5;
+
                         if (recipeNeedsWood && !hasWood)
                         {
-                            // We chopped a block that was needed! Ruined!
-                            ruined = true;
+                            // Only ruin if we are INSIDE the log's radius. 
+                            // If the recipe wants wood in the corner (outside radius), we ignore it.
+                            if (insideLog)
+                            {
+                                ruined = true;
+                            }
                         }
 
                         if (!recipeNeedsWood && hasWood)
@@ -417,8 +467,8 @@ namespace TreeSplitting.BlockEntities
                 if (WorkItemStack != null)
                 {
                     ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
-                    if (!player.InventoryManager.TryGiveItemstack(result))
-                        Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+                    //if (!player.InventoryManager.TryGiveItemstack(result))
+                    Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
 
                     Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
                 }

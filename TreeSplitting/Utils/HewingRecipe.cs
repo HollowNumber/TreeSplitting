@@ -189,12 +189,15 @@ namespace TreeSplitting.Utils
                         this.Code ?? "<null>");
                     return null;
                 }
+                
+                if (Output.Quantity == null) Output.Quantity = 1;
+                
         
                 var block = world.GetBlock(finalLoc);
-                if (block != null && block.Code != null) return new ItemStack(block);
+                if (block != null && block.Code != null) return new ItemStack(block, Output.Quantity);
         
                 var item = world.GetItem(finalLoc);
-                if (item != null && item.Code != null) return new ItemStack(item);
+                if (item != null && item.Code != null) return new ItemStack(item, Output.Quantity);
         
                 world.Logger.Warning("HewingRecipe.GenerateOutput: could not resolve output asset '{0}' for recipe {1}",
                     finalCode, this.Code ?? "<null>");

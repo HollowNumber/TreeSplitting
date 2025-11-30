@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TreeSplitting.Gui;
+using TreeSplitting.Network;
 using TreeSplitting.Rendering;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
@@ -41,12 +43,12 @@ namespace TreeSplitting.BlockEntities
         public Cuboidf[] SelectionBoxes = new Cuboidf[0];
         public Cuboidf[] CollisionBoxes = new Cuboidf[0];
         WoodWorkItemRenderer renderer;
+        GuiDialogRecipeSelector dialog;
 
         public override void Initialize(ICoreAPI api)
         {
             base.Initialize(api);
 
-            // Re-Link Recipe on Load
             if (SelectedRecipeCode != null)
             {
                 SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code == SelectedRecipeCode);
@@ -130,45 +132,116 @@ namespace TreeSplitting.BlockEntities
 
             RegenSelectionBoxes();
         }
+        
+        public void SetSelectedRecipe(AssetLocation code)
+        {
+            SelectedRecipeCode = code;
+            SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
+            if (SelectedRecipe != null)
+            {
+                GenerateTargetVoxels();
+                RegenSelectionBoxes();
+                MarkDirty();
+            }
+        }
 
         // Helper to convert Recipe Booleans to Target Bytes
         private void GenerateTargetVoxels()
         {
-            if (SelectedRecipe == null) return;
+            Api?.Logger?.Debug($"Generating Target Voxels for Recipe {SelectedRecipeCode}");
 
-            this.TargetVoxels = new byte[16, 16, 16];
-            for (int x = 0; x < 16; x++)
+            if (SelectedRecipe == null || SelectedRecipe.Voxels == null)
             {
-                for (int y = 0; y < 16; y++)
+                Api?.Logger?.Error($"SelectedRecipe is null or Voxels is null for Recipe {SelectedRecipeCode}");
+                TargetVoxels = null;
+                return;
+            }
+
+            try
+            {
+                int srcX = SelectedRecipe.Voxels.GetLength(0);
+                int srcY = SelectedRecipe.Voxels.GetLength(1);
+                int srcZ = SelectedRecipe.Voxels.GetLength(2);
+
+                // Allocate full 16x16x16 target (defaults to zeros)
+                this.TargetVoxels = new byte[16, 16, 16];
+
+                // Copy only within the source and target bounds to avoid exceptions
+                int maxX = Math.Min(16, srcX);
+                int maxY = Math.Min(16, srcY);
+                int maxZ = Math.Min(16, srcZ);
+
+                for (int x = 0; x < maxX; x++)
                 {
-                    for (int z = 0; z < 16; z++)
+                    for (int y = 0; y < maxY; y++)
                     {
-                        if (SelectedRecipe.Voxels[x, y, z])
+                        for (int z = 0; z < maxZ; z++)
                         {
-                            this.TargetVoxels[x, y, z] = 1;
+                            if (SelectedRecipe.Voxels[x, y, z])
+                            {
+                                this.TargetVoxels[x, y, z] = 1;
+                            }
                         }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Api?.Logger?.Error("GenerateTargetVoxels failed: {0}\n{1}", ex.Message, ex.StackTrace);
+                TargetVoxels = null;
             }
         }
 
         public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
         {
-            // CASE A: Placing a log (Shift + Right Click with Log)
-            if (WorkItemStack == null && byPlayer.Entity.Controls.ShiftKey)
-            {
-                return TryPutLog(byPlayer);
-            }
+            if (WorkItemStack == null && byPlayer.Entity.Controls.ShiftKey) return TryPutLog(byPlayer);
+            if (WorkItemStack != null && byPlayer.Entity.Controls.ShiftKey) return TryTakeLog(byPlayer);
 
-            // CASE B: Taking the log back (Shift + Right Click Empty Hand)
-            if (WorkItemStack != null && byPlayer.Entity.Controls.ShiftKey)
+            if (WorkItemStack != null && SelectedRecipe == null)
             {
-                return TryTakeLog(byPlayer);
+                return true;
             }
 
             return false;
         }
 
+        private void OpenRecipeDialog(IPlayer player)
+        {
+            var capi = Api as ICoreClientAPI;
+            Api.Logger.Debug( $"Trying to open RecipeDialog" );
+
+            if (capi == null || WorkItemStack == null) return;
+
+            var matching = TreeSplittingModSystem.Recipes
+                .Where(r => r.Matches(Api.World, WorkItemStack) && r.Output?.ResolvedItemstack != null)
+                .ToList();
+            
+            capi.Logger.Debug( $"Found {matching.Count} matching recipes");
+
+            if (matching.Count == 0) return;
+
+            var stacks = matching
+                .Select(r => r.Output?.ResolvedItemstack?.Clone())
+                .Where(stack => stack != null)
+                .ToList();
+            
+            var dialog = new GuiDialogRecipeSelector(capi, stacks,
+                (selectedIndex) =>
+                {
+                    if (selectedIndex >= 0 && selectedIndex < matching.Count)
+                    {
+                        var recipe = matching[selectedIndex];
+                        capi.Network.GetChannel("treesplitting").SendPacket(new RecipeSelectPacket()
+                        {
+                            Pos = Pos,
+                            RecipeCode = recipe.Code.ToString()
+                        });
+                    }
+                },
+                "Select Hewing Recipe"
+            );
+            dialog.TryOpen();
+        }
 
         public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode)
         {
@@ -181,47 +254,38 @@ namespace TreeSplitting.BlockEntities
             ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
             if (heldStack == null) return false;
 
-            // Find matching recipe
-            var recipe = TreeSplittingModSystem.Recipes.FirstOrDefault(r => r.Matches(Api.World, heldStack));
-            if (recipe == null) return false;
+            // Do we have ANY matches?
+            if (!TreeSplittingModSystem.Recipes.Any(r => r.Matches(Api.World, heldStack))) return false;
 
-            // 1. Move Item
             WorkItemStack = heldStack.Clone();
             WorkItemStack.StackSize = 1;
             byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
 
-            // 2. Setup Data
-            SelectedRecipe = recipe;
-            SelectedRecipeCode = recipe.Code;
-            GenerateLogVoxels();
-            GenerateTargetVoxels(); // Prepare overlay
+            SelectedRecipe = null;
+            SelectedRecipeCode = null;
 
-            // 3. Update
+            GenerateLogVoxels();
+
             RegenSelectionBoxes();
             MarkDirty();
+
+            OpenRecipeDialog(byPlayer);
             return true;
         }
+
 
         private bool TryTakeLog(IPlayer byPlayer)
         {
             if (WorkItemStack == null) return false;
-
             ItemStack stackToReturn = WorkItemStack.Clone();
             stackToReturn.StackSize = 1;
-
             if (!byPlayer.InventoryManager.TryGiveItemstack(stackToReturn))
-            {
                 Api.World.SpawnItemEntity(stackToReturn, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
-            }
+            ResetBlock();
 
-            WorkItemStack = null;
-            SelectedRecipe = null;
-            SelectedRecipeCode = null;
-            Voxels = new byte[16, 16, 16];
-            TargetVoxels = null; // Clear overlay
+            // Close GUI if open
+            if (Api.Side == EnumAppSide.Client) dialog?.TryClose();
 
-            RegenSelectionBoxes();
-            MarkDirty();
             return true;
         }
 
@@ -233,16 +297,9 @@ namespace TreeSplitting.BlockEntities
                 {
                     double dist = Math.Sqrt(Math.Pow(x - 7.5, 2) + Math.Pow(z - 7.5, 2));
                     byte mat = (byte)EnumWoodMaterial.Empty;
-
                     if (dist <= 7.5)
-                    {
                         mat = (dist > 6.0) ? (byte)EnumWoodMaterial.Bark : (byte)EnumWoodMaterial.Heartwood;
-                    }
-
-                    for (int y = 0; y < 16; y++)
-                    {
-                        Voxels[x, y, z] = mat;
-                    }
+                    for (int y = 0; y < 16; y++) Voxels[x, y, z] = mat;
                 }
             }
         }

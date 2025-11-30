@@ -13,7 +13,7 @@
             <Private>false</Private>
         </Reference>
     </ItemGroup>
-    
+   
     <ItemGroup>
         <Reference Include="protobuf-net">
             <HintPath>$(VINTAGE_STORY)/lib/protobuf-net.dll</HintPath>

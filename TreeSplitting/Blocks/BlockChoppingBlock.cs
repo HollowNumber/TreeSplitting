@@ -56,10 +56,6 @@ namespace TreeSplitting.Blocks
         }
 
 
-        // ====================================================================
-        // 2. SELECTION BOXES (Wireframes)
-        // ====================================================================
-        // This merges the "Stump" box with the dynamic "Log" boxes so the player can look at them.
         public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
             BEChoppingBlock? be = blockAccessor.GetBlockEntity(pos) as BEChoppingBlock;
@@ -67,13 +63,8 @@ namespace TreeSplitting.Blocks
             // If we have a valid BE and it has active voxels...
             if (be != null && be.SelectionBoxes.Length > 0)
             {
-                // 1. Create a copy of the BE's boxes
-                // We clone it so we don't accidentally modify the BE's stored data
                 Cuboidf[] combinedBoxes = (Cuboidf[])be.SelectionBoxes.Clone();
 
-                // 2. Fill in Index 0 (The Stump)
-                // The BE intentionally leaves index 0 as null.
-                // We fetch the "Default" shape (defined in your blocktype JSON) to fill it.
                 Cuboidf[] stumpBoxes = base.GetSelectionBoxes(blockAccessor, pos);
                 
                 if (stumpBoxes.Length > 0)

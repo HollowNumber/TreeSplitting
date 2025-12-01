@@ -7,7 +7,7 @@
         "HollowNumber"
     ],
     "description": "Makes woodworking more fun!",
-    "version": "0.0.2",
+    "version": "0.0.1",
     "dependencies": {
         "game": "1.21.0"
     }

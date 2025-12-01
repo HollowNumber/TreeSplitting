@@ -495,13 +495,7 @@ namespace TreeSplitting.BlockEntities
             {
                 renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels);
             }
-
-            if (WorkItemStack == null)
-            {
-                SelectionBoxes = new Cuboidf[0];
-                CollisionBoxes = new Cuboidf[0];
-                return;
-            }
+            
 
             List<Cuboidf> boxes = new List<Cuboidf>();
             boxes.Add(new Cuboidf(0, 0, 0, 1, 10f / 16f, 1)); // Stump
@@ -534,6 +528,8 @@ namespace TreeSplitting.BlockEntities
 
             SelectionBoxes = boxes.ToArray();
             CollisionBoxes = boxes.ToArray();
+            
+          
         }
 
         public override void OnBlockRemoved()

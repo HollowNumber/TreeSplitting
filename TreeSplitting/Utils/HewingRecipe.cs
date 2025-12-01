@@ -24,8 +24,6 @@ public class HewingRecipe
     public string[][] Pattern;
 
 
-    // -- Runtime Logic Fields --
-
     // The 3D grid used by the BlockEntity
     // true = Wood must exist here
     // false = Empty space (must be chopped)
@@ -33,7 +31,7 @@ public class HewingRecipe
 
 
     /// <summary>
-    /// Called by your ModSystem after loading the JSON.
+    /// Called by ModSystem after loading the JSON.
     /// Converts the text pattern into the boolean voxel grid.
     /// </summary>
     public void Resolve(IWorldAccessor world)
@@ -161,7 +159,7 @@ public class HewingRecipe
             {
                 world.Logger.Warning(
                     "HewingRecipe.GenerateOutput: failed to extract wood identifier from '{0}' for recipe {1}",
-                    inputCode, this.Code ?? "<null>");
+                    inputCode, Code ?? "<null>");
                 return null;
             }
         
@@ -170,7 +168,7 @@ public class HewingRecipe
         
             world.Logger.Debug(
                 "HewingRecipe.GenerateOutput: recipe={0}, outputTemplate={1}, inputCode={2}, woodName={3}, finalCode={4}",
-                this.Code?.ToString() ?? "<null>",
+                Code?.ToString() ?? "<null>",
                 outputTemplate,
                 inputCode,
                 woodName,
@@ -186,7 +184,7 @@ public class HewingRecipe
             {
                 world.Logger.Warning(
                     "HewingRecipe.GenerateOutput: invalid output asset location '{0}' for recipe {1}", finalCode,
-                    this.Code ?? "<null>");
+                    Code ?? "<null>");
                 return null;
             }
                 

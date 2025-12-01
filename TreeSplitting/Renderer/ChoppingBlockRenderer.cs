@@ -16,7 +16,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private MeshRef overlayMeshRef; 
     private Matrixf ModelMat = new Matrixf();
         
-    // Pre-computed white color for vertices (full brightness)
     private static readonly int WhiteColor = ColorUtil.ToRgba(255, 255, 255, 255);
 
     public double RenderOrder => 0.5;
@@ -40,7 +39,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
             return;
         }
 
-        // 1. Main Wood Mesh - with flags for proper lighting/normals
         MeshData mesh = new MeshData(24, 36, false, true, true, true);
             
         float pixelSize = 1f / 16f; 
@@ -216,7 +214,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         meshRef = api.Render.UploadMesh(mesh);
 
 
-        // 2. Green Overlay Mesh
         if (overlayMeshRef != null) { overlayMeshRef.Dispose(); overlayMeshRef = null; }
             
         if (targetVoxels != null)
@@ -261,7 +258,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Adds a single quad face to the mesh with proper texture coordinates.
+    /// Adds a single quad face to the mesh with proper texture coordinates. This shit so messy lol
     /// </summary>
     /// <param name="mesh">The mesh to add the face to</param>
     /// <param name="tex">The texture atlas position</param>

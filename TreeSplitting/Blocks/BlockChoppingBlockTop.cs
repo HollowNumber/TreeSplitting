@@ -21,7 +21,6 @@ public class BlockChoppingBlockTop : Block
                 
             // Return ALL boxes, shifted down by 1.0
             // This ensures visual continuity (wireframe covers whole log)
-            // And keeps indices 1:1 with the BE array
             foreach (var box in allBoxes)
             {
                 Cuboidf shiftedBox = new Cuboidf(
@@ -65,13 +64,6 @@ public class BlockChoppingBlockTop : Block
         BlockPos botPos = blockSel.Position.DownCopy();
         if (world.BlockAccessor.GetBlockEntity(botPos) is BEChoppingBlock be)
         {
-            // We act as if we clicked the BE directly
-            // However, since we have the full box list (shifted), the Index is correct!
-                 
-            // If we want to support Placing/Taking by clicking top block:
-            // Pass the event to the BE logic.
-            // Note: TryPutLog/TryTakeLog usually checks Shift+RightClick.
-                 
             if (be.OnInteract(byPlayer, blockSel)) return true;
         }
         return base.OnBlockInteractStart(world, byPlayer, blockSel);

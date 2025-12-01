@@ -15,6 +15,8 @@ public class ChopPacket
     [ProtoMember(3)] public int VoxelY;
 
     [ProtoMember(4)] public int VoxelZ;
+    
     [ProtoMember(5)] public int FaceIndex;
+    
     [ProtoMember(6)] public EnumToolMode ToolMode;
 }

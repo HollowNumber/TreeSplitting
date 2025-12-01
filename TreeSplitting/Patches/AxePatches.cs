@@ -15,14 +15,12 @@ namespace TreeSplitting.Patches;
 [HarmonyPatchCategory("treesplitting")]
 public class AxePatches
 {
-    // We hold a reference to the cached array here
     private static SkillItem[] CustomModes;
 
     [HarmonyPostfix]
     [HarmonyPatch(typeof(CollectibleObject), "OnLoaded")]
     public static void OnLoadedPostfix(CollectibleObject __instance, ICoreAPI api)
     {
-        // Only run for Axes on the Client
         if (!(__instance is ItemAxe)) return;
         if (api.Side != EnumAppSide.Client) return;
 
@@ -88,6 +86,7 @@ public class AxePatches
         return false; // Skip original
     }
     
+    // DrawSplit and DrawUpset are shamelessly stolen from ItemHammer in vssurvivalmod
     private static void DrawSplit(Context cr, int x, int y, float width, float height, double[] colordoubles)
         {
             Pattern pattern = null;

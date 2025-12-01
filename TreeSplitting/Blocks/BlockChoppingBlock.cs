@@ -10,7 +10,6 @@ public class BlockChoppingBlock : Block
     public override bool CanPlaceBlock(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel,
         ref string failureCode)
     {
-        // Check standard placement rules first
         if (!base.CanPlaceBlock(world, byPlayer, blockSel, ref failureCode)) return false;
 
         // Check if the space ABOVE is free for the top part

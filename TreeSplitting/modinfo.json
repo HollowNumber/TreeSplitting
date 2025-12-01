@@ -4,10 +4,10 @@
     "modid": "treesplitting",
     "name": "TreeSplitting",
     "authors": [
-        "Unknown"
+        "HollowNumber"
     ],
-    "description": "To be added",
-    "version": "0.0.1",
+    "description": "Makes woodworking more fun!",
+    "version": "0.0.2",
     "dependencies": {
         "game": "1.21.0"
     }

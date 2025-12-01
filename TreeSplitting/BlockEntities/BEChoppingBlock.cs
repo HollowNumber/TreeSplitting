@@ -7,10 +7,8 @@ using TreeSplitting.Rendering;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
-using Vintagestory.API.Util;
 
 namespace TreeSplitting.BlockEntities;
 
@@ -40,8 +38,8 @@ public class BEChoppingBlock : BlockEntity
     public HewingRecipe? SelectedRecipe; // Runtime only
 
     // Visuals
-    public Cuboidf[] SelectionBoxes = new Cuboidf[0];
-    public Cuboidf[] CollisionBoxes = new Cuboidf[0];
+    public Cuboidf[] SelectionBoxes = [];
+    public Cuboidf[] CollisionBoxes = [];
     WoodWorkItemRenderer renderer;
     GuiDialogRecipeSelector dialog;
 
@@ -184,7 +182,7 @@ public class BEChoppingBlock : BlockEntity
                     {
                         if (SelectedRecipe.Voxels[x, y, z])
                         {
-                            this.TargetVoxels[x, y, z] = 1;
+                            TargetVoxels[x, y, z] = 1;
                         }
                     }
                 }
@@ -245,7 +243,6 @@ public class BEChoppingBlock : BlockEntity
 
         if (matching.Count == 0) return;
 
-        // Don't declare 'var dialog', use the class field 'dialog' so we can close it later
         if (dialog?.IsOpened() == true) dialog.TryClose();
 
         dialog = new GuiDialogRecipeSelector(capi, stacks,
@@ -362,12 +359,12 @@ public class BEChoppingBlock : BlockEntity
         double dz = player.Entity.Pos.Z - (Pos.Z + 0.5);
         byte empty = (byte)EnumWoodMaterial.Empty;
 
-        if (Math.Abs(dx) > Math.Abs(dz)) 
+        if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player is East (+) or West (-)
             // If East (dx>0), looking West. Left is South (+Z).
             // If West (dx<0), looking East. Left is North (-Z).
-            int step = dx > 0 ? 1 : -1; 
+            int step = dx > 0 ? 1 : -1;
             int end = dx > 0 ? 16 : -1;
 
             for (int z = pos.Z; z != end; z += step)
@@ -440,7 +437,6 @@ public class BEChoppingBlock : BlockEntity
 
             for (int x = pos.X; x != end; x += step)
             {
-                // Cut "all the way through" the depth (Z axis)
                 if (x >= 0 && x < 16)
                 {
                     for (int z = 0; z < 16; z++)
@@ -460,7 +456,6 @@ public class BEChoppingBlock : BlockEntity
         double dz = player.Entity.Pos.Z - (Pos.Z + 0.5);
         byte empty = (byte)EnumWoodMaterial.Empty;
 
-        // REVERTED: Splitting parallel to view (Lengthwise split)
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player is East/West (View along X). Split along X (vary X, fixed Z).
@@ -487,12 +482,8 @@ public class BEChoppingBlock : BlockEntity
 
     private void HandlePreciseChop(Vec3i pos, BlockFacing facing)
     {
-        if (facing == BlockFacing.UP)
-        {
-            for (int i = 1; i <= 3; i++)
-                if (pos.Y - i >= 0)
-                    Voxels[pos.X, pos.Y - i, pos.Z] = (byte)EnumWoodMaterial.Empty;
-        }
+        if (facing != BlockFacing.UP) return;
+        Voxels[pos.X, pos.Y, pos.Z] = (byte)EnumWoodMaterial.Empty;
     }
 
     private void CheckIfFinished(IPlayer player)

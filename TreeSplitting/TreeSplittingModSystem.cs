@@ -16,7 +16,7 @@ namespace TreeSplitting;
 
 public class TreeSplittingModSystem : ModSystem
 {
-    public static TreeSplittingConfig Config;
+    //public static TreeSplittingConfig Config;
     public static List<HewingRecipe> Recipes = new();
 
     private IClientNetworkChannel clientChannel;

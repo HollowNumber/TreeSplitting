@@ -1,6 +1,7 @@
 {
   "block-choppingblock": "Chopping Block",
   "blockdesc-choppingblock": "A sturdy stump for hewing logs into beams.",
+  "block-choppingblocktop": " ",
   "blockhelp-choppingblock-place": "Place Log",
   "blockhelp-choppingblock-take": "Take Log",
   "blockhelp-choppingblock-chop": "Chop"

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
 using TreeSplitting.Config;
@@ -7,6 +8,7 @@ using TreeSplitting.Network;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
@@ -20,6 +22,8 @@ public class TreeSplittingModSystem : ModSystem
     private IClientNetworkChannel clientChannel;
     private IServerNetworkChannel serverChannel;
     private ICoreAPI api;
+    
+    private Harmony patcher;
 
     public override void Start(ICoreAPI api)
     {
@@ -35,10 +39,26 @@ public class TreeSplittingModSystem : ModSystem
 
         string modid = Mod.Info.ModID;
 
+
+        if (!Harmony.HasAnyPatches(modid))
+        {
+            patcher = new Harmony(modid);
+            
+            patcher.PatchCategory(modid);
+        }
+
         api.RegisterBlockEntityClass(modid + ".choppingblockentity", typeof(BEChoppingBlock));
         api.RegisterBlockClass(modid + ".choppingblocktop", typeof(BlockChoppingBlockTop));
         api.RegisterBlockClass(modid + ".choppingblock", typeof(BlockChoppingBlock));
         
+    }
+
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        
+        patcher?.UnpatchAll(Mod.Info.ModID);
     }
 
     private static void LoadRecipes(ICoreAPI api)
@@ -71,6 +91,8 @@ public class TreeSplittingModSystem : ModSystem
 
         api.Event.MouseDown += OnClientMouseDown;
     }
+
+
 
     public override void StartServerSide(ICoreServerAPI api)
     {
@@ -133,7 +155,6 @@ public class TreeSplittingModSystem : ModSystem
             // Index 0 is Stump. We let vanilla break stump if they hit it.
             if (sel.SelectionBoxIndex > 0 && sel.SelectionBoxIndex < be.SelectionBoxes.Length)
             {
-                // INTERCEPT!
                 args.Handled = true;
 
                 // Calculate Voxel Coords locally
@@ -143,8 +164,11 @@ public class TreeSplittingModSystem : ModSystem
                 int z = (int)(box.Z1 * 16);
 
                 // Get Tool Mode
-                EnumToolMode mode = (EnumToolMode)held.Attributes.GetInt("toolMode", 0);
+                int modeIndex = held.Attributes.GetInt("toolMode");
+                
 
+                capi.Logger.Debug("Tool Mode: {0}", modeIndex);
+                
                 // Send Packet
                 clientChannel.SendPacket(new ChopPacket()
                 {
@@ -153,10 +177,34 @@ public class TreeSplittingModSystem : ModSystem
                     VoxelY = y,
                     VoxelZ = z,
                     FaceIndex = sel.Face.Index,
-                    ToolMode = mode
+                    ToolMode = (EnumToolMode)modeIndex
                 });
+               
 
-                capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), bePos.X, bePos.Y, bePos.Z, null);
+                AnimationMetaData AnimationMetaData = new AnimationMetaData()
+                {
+                    Code = "axechop",
+                    Animation = "axechop",
+                    AnimationSpeed = 1f,
+                    Weight = 10,
+                    BlendMode = EnumAnimationBlendMode.Average,
+                    EaseInSpeed = 999f, // Start immediately
+                    EaseOutSpeed = 999f, // End immediately
+                    TriggeredBy = new AnimationTrigger()
+                    {
+                        OnControls = new[] { EnumEntityActivity.Idle },
+                        MatchExact = false
+                    }
+
+                }.Init();
+                
+                capi.World.Player.Entity.AnimManager.StartAnimation(AnimationMetaData);
+
+                capi.World.RegisterCallback((dt) => { capi.World.Player.Entity.AnimManager.StopAnimation(AnimationMetaData.Code); },
+                    500);
+                
+                capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), bePos.X, bePos.Y, bePos.Z);
+                
             }
         }
     }

@@ -1,8 +1,9 @@
 ﻿{
   "code": "hewing-beam",
+  "toolmode": "hewing",
   "ingredient": {
     "type": "block",
-    "code": "game:log-*-ud",
+    "code": "game:debarkedlog-*-ud",
     "name": "wood"
   },
   "output": {

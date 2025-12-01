@@ -1,81 +1,84 @@
+using System;
 using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using TreeSplitting.BlockEntities;
+using Vintagestory.API.Client;
 
-namespace TreeSplitting.Blocks
+namespace TreeSplitting.Blocks;
+
+public class BlockChoppingBlockTop : Block
 {
-    public class BlockChoppingBlockTop : Vintagestory.API.Common.Block
+    public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
     {
-        public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
+        BlockPos botPos = pos.DownCopy();
+        if (blockAccessor.GetBlockEntity(botPos) is BEChoppingBlock be)
         {
-            BlockPos botPos = pos.DownCopy();
-            if (blockAccessor.GetBlockEntity(botPos) is BEChoppingBlock be)
-            {
-                Cuboidf[] allBoxes = be.SelectionBoxes;
-                if (allBoxes == null) return base.GetSelectionBoxes(blockAccessor, pos);
+            Cuboidf[] allBoxes = be.SelectionBoxes;
+            if (allBoxes == null) return base.GetSelectionBoxes(blockAccessor, pos);
 
-                List<Cuboidf> shiftedBoxes = new List<Cuboidf>();
+            List<Cuboidf> shiftedBoxes = new List<Cuboidf>();
                 
-                // Return ALL boxes, shifted down by 1.0
-                // This ensures visual continuity (wireframe covers whole log)
-                // And keeps indices 1:1 with the BE array
-                foreach (var box in allBoxes)
-                {
-                    Cuboidf shiftedBox = new Cuboidf(
-                        box.X1, 
-                        box.Y1 - 1.0f, 
-                        box.Z1, 
-                        box.X2, 
-                        box.Y2 - 1.0f, 
-                        box.Z2
-                    );
-                    shiftedBoxes.Add(shiftedBox);
-                }
-                return shiftedBoxes.ToArray();
-            }
-            return base.GetSelectionBoxes(blockAccessor, pos);
-        }
-
-        public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
-        {
-            // Collision should ideally match selection so you don't walk through parts you can see
-            return GetSelectionBoxes(blockAccessor, pos);
-        }
-
-        public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
-        {
-            BlockPos botPos = pos.DownCopy();
-            if (world.BlockAccessor.GetBlock(botPos) is BlockChoppingBlock)
+            // Return ALL boxes, shifted down by 1.0
+            // This ensures visual continuity (wireframe covers whole log)
+            // And keeps indices 1:1 with the BE array
+            foreach (var box in allBoxes)
             {
-                world.BlockAccessor.BreakBlock(botPos, byPlayer);
+                Cuboidf shiftedBox = new Cuboidf(
+                    box.X1, 
+                    box.Y1 - 1.0f, 
+                    box.Z1, 
+                    box.X2, 
+                    box.Y2 - 1.0f, 
+                    box.Z2
+                );
+                shiftedBoxes.Add(shiftedBox);
             }
-            else
-            {
-                base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
-            }
+            return shiftedBoxes.ToArray();
         }
-
-        public override bool OnBlockInteractStart(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel)
-        {
-            BlockPos botPos = blockSel.Position.DownCopy();
-            if (world.BlockAccessor.GetBlockEntity(botPos) is BEChoppingBlock be)
-            {
-                // We act as if we clicked the BE directly
-                // However, since we have the full box list (shifted), the Index is correct!
-                 
-                // If we want to support Placing/Taking by clicking top block:
-                // Pass the event to the BE logic.
-                // Note: TryPutLog/TryTakeLog usually checks Shift+RightClick.
-                 
-                if (be.OnInteract(byPlayer, blockSel)) return true;
-            }
-            return base.OnBlockInteractStart(world, byPlayer, blockSel);
-        }
+        return base.GetSelectionBoxes(blockAccessor, pos);
+    }
         
-        public override ItemStack[] GetDrops(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
+
+    public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
+    {
+        // Collision should ideally match selection so you don't walk through parts you can see
+        return GetSelectionBoxes(blockAccessor, pos);
+    }
+
+    public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
+    {
+        BlockPos botPos = pos.DownCopy();
+        if (world.BlockAccessor.GetBlock(botPos) is BlockChoppingBlock)
         {
-            return new ItemStack[0];
+            world.BlockAccessor.BreakBlock(botPos, byPlayer);
         }
+        else
+        {
+            base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
+        }
+    }
+
+    
+    public override bool OnBlockInteractStart(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel)
+    {
+        BlockPos botPos = blockSel.Position.DownCopy();
+        if (world.BlockAccessor.GetBlockEntity(botPos) is BEChoppingBlock be)
+        {
+            // We act as if we clicked the BE directly
+            // However, since we have the full box list (shifted), the Index is correct!
+                 
+            // If we want to support Placing/Taking by clicking top block:
+            // Pass the event to the BE logic.
+            // Note: TryPutLog/TryTakeLog usually checks Shift+RightClick.
+                 
+            if (be.OnInteract(byPlayer, blockSel)) return true;
+        }
+        return base.OnBlockInteractStart(world, byPlayer, blockSel);
+    }
+        
+    public override ItemStack[] GetDrops(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
+    {
+        return [];
     }
 }

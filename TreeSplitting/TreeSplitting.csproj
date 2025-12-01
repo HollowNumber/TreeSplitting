@@ -8,15 +8,23 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Reference Include="cairo-sharp">
+          <HintPath>C:\Users\Mikkel\AppData\Roaming\Vintagestory\Lib\cairo-sharp.dll</HintPath>
+        </Reference>
         <Reference Include="VintagestoryAPI">
             <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
             <Private>false</Private>
         </Reference>
-    </ItemGroup>
-   
-    <ItemGroup>
+        <Reference Include="VSSurvivalMod">
+            <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>      
+            <Private>false</Private>
+        </Reference>
         <Reference Include="protobuf-net">
             <HintPath>$(VINTAGE_STORY)/lib/protobuf-net.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="harmony">
+            <HintPath>$(VINTAGE_STORY)/lib/0Harmony.dll</HintPath>
             <Private>false</Private>
         </Reference>
     </ItemGroup>

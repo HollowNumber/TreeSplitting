@@ -413,11 +413,10 @@ public class BEChoppingBlock : BlockEntity
 
         switch (tool)
         {
-            case EnumAxeToolModes.ChopDown:
+            case EnumAxeToolModes.ChopVertical:
                 HandleChopDown(pos, facing, player);
                 break;
-            case EnumAxeToolModes.ChopSideways:
-                if (facing == BlockFacing.UP) return;
+            case EnumAxeToolModes.ChopHorizontal:
                 HandleChopSideways(pos);
                 break;
         }

@@ -31,9 +31,9 @@ public class AxePatches
         {
             SkillItem[] modes = new SkillItem[2];
 
-            modes[0] = new SkillItem() { Code = new AssetLocation("chopping-down"), Name = "Chop Down" }.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpset(cr, x, y, width, height, rgba, GameMath.PI));
+            modes[0] = new SkillItem() { Code = new AssetLocation("chopping-down"), Name = "Chop Vertical" }.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpDown(cr, x, y, width, height, rgba, GameMath.PI));
 
-            modes[1] = new SkillItem() { Code = new AssetLocation("chopping-sideways"), Name = "Chop Sideways" }.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
+            modes[1] = new SkillItem() { Code = new AssetLocation("chopping-sideways"), Name = "Chop Horizontal" }.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
             
             
             return modes;

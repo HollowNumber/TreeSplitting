@@ -10,7 +10,7 @@ namespace TreeSplitting.Handlers;
 public class ClientNetworkHandler
 {
     private readonly ICoreClientAPI _capi;
-    private IClientNetworkChannel _channel;
+    private readonly IClientNetworkChannel _channel;
 
 
     public ClientNetworkHandler(ICoreClientAPI capi)
@@ -28,7 +28,7 @@ public class ClientNetworkHandler
 
         // We assume that if the mouse isn't grabbed the player is in some ui and therefore we dont interact.
         if (!_capi.Input.MouseGrabbed) return;
-        
+
 
         BlockSelection sel = _capi.World.Player.CurrentBlockSelection;
         if (sel is null) return;
@@ -38,23 +38,23 @@ public class ClientNetworkHandler
         if (block is not (BlockChoppingBlockTop or BlockChoppingBlock))
             return;
 
-        ItemStack heldItemStack = _capi.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack;
+        ItemSlot activeSlot = _capi.World.Player.InventoryManager.ActiveHotbarSlot;
+        ItemStack heldItemStack = activeSlot.Itemstack;
 
         if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel)) return;
-        
+
         BlockPos pos = sel.Position;
-        
+
         if (block is BlockChoppingBlockTop) pos = pos.DownCopy();
-        
+
         BEChoppingBlock be = _capi.World.BlockAccessor.GetBlockEntity<BEChoppingBlock>(pos);
 
         if (be is null) return;
 
-        //BUG: When in Tool selection, when you try to select a toolmode it treats it as a voxel hit and causes this logic to fire.
         if (sel.SelectionBoxIndex <= 0 || sel.SelectionBoxIndex >= be.SelectionBoxes.Length) return;
         e.Handled = true;
 
-        // Calculate voxel coords
+        // Calculate voxel coord
 
         Cuboidf box = be.SelectionBoxes[sel.SelectionBoxIndex];
 
@@ -63,6 +63,17 @@ public class ClientNetworkHandler
         int z = (int)(box.Z1 * 16);
 
         int mode = heldItemStack.Attributes.GetInt("toolMode");
+
+        _capi.Logger.Debug($"Calling Animation for {heldItemStack.Item.Code.Path} at {pos} with mode {mode}");
+        string anim = heldItemStack.Item.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+
+        // So we default to "axehit" if the item is silent.
+        if (string.IsNullOrEmpty(anim)) anim = "axehit";
+
+        _capi.World.Player.Entity.StartAnimation(anim);
+        _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
+
+        _capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), pos.X, pos.Y, pos.Z, _capi.World.Player);
 
         _channel.SendPacket(new ToolActionPacket()
         {
@@ -74,4 +85,5 @@ public class ClientNetworkHandler
             ToolMode = (EnumToolMode)mode,
         });
     }
+
 }

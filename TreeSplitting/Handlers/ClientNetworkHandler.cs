@@ -26,6 +26,10 @@ public class ClientNetworkHandler
     {
         if (e.Button != EnumMouseButton.Left) return;
 
+        // We assume that if the mouse isn't grabbed the player is in some ui and therefore we dont interact.
+        if (!_capi.Input.MouseGrabbed) return;
+        
+
         BlockSelection sel = _capi.World.Player.CurrentBlockSelection;
         if (sel is null) return;
 
@@ -46,6 +50,7 @@ public class ClientNetworkHandler
 
         if (be is null) return;
 
+        //BUG: When in Tool selection, when you try to select a toolmode it treats it as a voxel hit and causes this logic to fire.
         if (sel.SelectionBoxIndex <= 0 || sel.SelectionBoxIndex >= be.SelectionBoxes.Length) return;
         e.Handled = true;
 

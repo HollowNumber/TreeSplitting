@@ -43,6 +43,20 @@ public class ClientNetworkHandler
 
         if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel)) return;
 
+        
+        if (heldItemStack?.Item?.Tool is EnumTool.Chisel )
+        {
+            string offhand = _capi.World.Player.InventoryManager.OffhandHotbarSlot.Itemstack?.Item?.Code.ToString();
+
+            if (offhand is null || !offhand.Contains("hammer"))
+            {
+                //The game does this automatically _capi.TriggerIngameError(new AssetLocation("treesplitting"), "chiselhammer", "You need to hold a hammer in your offhand to chisel wood voxels.");
+                return;     
+            }
+            
+           
+        }
+        
         BlockPos pos = sel.Position;
 
         if (block is BlockChoppingBlockTop) pos = pos.DownCopy();
@@ -82,7 +96,7 @@ public class ClientNetworkHandler
             VoxelY = y,
             VoxelZ = z,
             FaceIndex = sel.Face.Index,
-            ToolMode = (EnumToolMode)mode,
+            ToolMode = mode,
         });
     }
 

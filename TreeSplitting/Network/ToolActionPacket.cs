@@ -19,6 +19,6 @@ public class ToolActionPacket
     
     [ProtoMember(5)] public int FaceIndex;
     
-    [ProtoMember(6)] public EnumToolMode ToolMode;
+    [ProtoMember(6)] public int ToolMode;
 
 }

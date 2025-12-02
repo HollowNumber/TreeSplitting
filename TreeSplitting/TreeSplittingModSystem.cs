@@ -3,16 +3,16 @@ using System.Linq;
 using HarmonyLib;
 using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
-using TreeSplitting.Config;
 using TreeSplitting.Handlers;
 using TreeSplitting.Item;
 using TreeSplitting.Network;
 using TreeSplitting.Recipes;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Common.Entities;
-using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+
+// TODO: Add localisation with the en.json file.
+// TODO: Add WorldInteractions to the ChoppingBlock. 
 
 namespace TreeSplitting;
 

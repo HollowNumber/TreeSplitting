@@ -1,6 +1,6 @@
 namespace TreeSplitting.Enums;
 
-public enum SawToolModes : byte
+public enum EnumSawToolModes : byte
 {
     SawDown = 0,
     SawRight = 1,

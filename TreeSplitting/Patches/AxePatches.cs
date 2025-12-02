@@ -29,7 +29,7 @@ public class AxePatches
 
         CustomModes = ObjectCacheUtil.GetOrCreate(api, "treesplittingAxeModes", () =>
         {
-            SkillItem[] modes = new SkillItem[4];
+            SkillItem[] modes = new SkillItem[3];
 
             modes[0] = new SkillItem() { Code = new AssetLocation("chopping-down"), Name = "Chop Down" }.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpset(cr, x, y, width, height, rgba, GameMath.PI));
 
@@ -37,8 +37,6 @@ public class AxePatches
             
             modes[2] = new SkillItem() { Code = new AssetLocation("chopping-left"), Name = "Chop Left" }.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpset(cr, x, y, w, h, c, 3* GameMath.PI / 2) );
             
-            modes[3] = new SkillItem() { Code = new AssetLocation("precise"), Name = "Precise" }.WithIcon(capi, Drawing.DrawSplit);
-
             return modes;
         });
     }

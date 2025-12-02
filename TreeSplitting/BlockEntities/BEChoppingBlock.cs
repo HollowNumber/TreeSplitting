@@ -9,6 +9,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using TreeSplitting.Enums;
 
 namespace TreeSplitting.BlockEntities;
 
@@ -18,14 +19,6 @@ public enum EnumWoodMaterial : byte
     Heartwood = 1,
     Sapwood = 2,
     Bark = 3,
-}
-
-public enum EnumToolMode : byte
-{
-    ChopDown = 0,
-    ChopRight = 1,
-    ChopLeft = 2,
-    Precise = 3,
 }
 
 public class BEChoppingBlock : BlockEntity
@@ -262,12 +255,162 @@ public class BEChoppingBlock : BlockEntity
         dialog.TryOpen();
     }
 
-    // TODO: Split up for tool usage, axe for big chops, saw for precise line work, chisel for one voxel work. 
-    public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode
-        )
+    // TODO: Make tools use durability
+    // TODO: Find out a better way to program this, will think about this.
+    public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, int toolMode
+    )
     {
         if (WorkItemStack == null) return;
-        OnChop(voxelPos, facing, byPlayer, toolMode);
+
+        ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
+
+        string heldItem = heldStack?.Item.Code.ToString();
+
+
+        if (voxelPos.X < 0 || voxelPos.X >= 16 ||
+            voxelPos.Y < 0 || voxelPos.Y >= 16 ||
+            voxelPos.Z < 0 || voxelPos.Z >= 16) return;
+
+        if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] == (byte)EnumWoodMaterial.Empty) return;
+
+        Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] = (byte)EnumWoodMaterial.Empty;
+
+        Api.Logger.Debug($"OnUseOver: {voxelPos}, {facing}, {toolMode}, {heldItem}");
+
+        if (heldItem.Contains("axe")) OnChop(voxelPos, facing, byPlayer, toolMode);
+        if (heldItem.Contains("saw")) OnSaw(voxelPos, facing, byPlayer, toolMode);
+        if (heldItem.Contains("chisel")) OnChisel(voxelPos, facing, byPlayer);
+
+        CheckIfFinished(byPlayer);
+        RegenSelectionBoxes();
+        MarkDirty(true);
+    }
+
+    private void OnSaw(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer, int toolMode)
+    {
+        EnumAxeToolModes tool = (EnumAxeToolModes)toolMode;
+
+        Api.Logger.Debug($"OnSaw: {voxelPos}, {facing}, {toolMode}");
+
+        if (tool == EnumAxeToolModes.ChopDown) HandleSawDown(voxelPos, facing, byPlayer);
+        if (tool == EnumAxeToolModes.ChopRight) HandleSawRight(voxelPos, facing, byPlayer);
+        else if (tool == EnumAxeToolModes.ChopLeft) HandleSawLeft(voxelPos, facing, byPlayer);
+    }
+
+    //TODO: Actually verify that the handle saw left and right work properly
+    private void HandleSawLeft(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    {
+        double dx = byPlayer.Entity.Pos.X - (Pos.X + 0.5);
+        double dz = byPlayer.Entity.Pos.Z - (Pos.Z + 0.5);
+        byte empty = (byte)EnumWoodMaterial.Empty;
+
+        if (Math.Abs(dx) > Math.Abs(dz))
+        {
+            // Player is East (+) or West (-)
+            // If East (dx>0), looking West. Left is South (+Z).
+            // If West (dx<0), looking East. Left is North (-Z).
+            int z = voxelPos.Z;
+
+            if (z >= 0 && z < 16)
+            {
+                for (int x = 0; x < 16; x++)
+                {
+                    Voxels[x, voxelPos.Y, z] = empty;
+                }
+            }
+        }
+        else
+        {
+            // Player is South (+) or North (-)
+            // If South (dz>0), looking North. Left is West (-X).
+            // If North (dz<0), looking South. Left is East (+X).
+            int x = voxelPos.X;
+
+            if (x >= 0 && x < 16)
+            {
+                for (int z = 0; z < 16; z++)
+                {
+                    Voxels[x, voxelPos.Y, z] = empty;
+                }
+            }
+        }
+    }
+
+    private void HandleSawRight(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    {
+        double dx = byPlayer.Entity.Pos.X - (Pos.X + 0.5);
+        double dz = byPlayer.Entity.Pos.Z - (Pos.Z + 0.5);
+        byte empty = (byte)EnumWoodMaterial.Empty;
+
+        if (Math.Abs(dx) > Math.Abs(dz))
+        {
+            // Player is East (+) or West (-)
+            // If East (dx>0), looking West. Right is North (-Z).
+            // If West (dx<0), looking East. Right is South (+Z).
+            int z = voxelPos.Z;
+
+            if (z >= 0 && z < 16)
+            {
+                for (int x = 0; x < 16; x++)
+                {
+                    Voxels[x, voxelPos.Y, z] = empty;
+                }
+            }
+        }
+        else
+        {
+            // Player is South (+) or North (-)
+            // If South (dz>0), looking North. Right is East (+X).
+            // If North (dz<0), looking South. Right is West (-X).
+            int x = voxelPos.X;
+
+            if (x >= 0 && x < 16)
+            {
+                for (int z = 0; z < 16; z++)
+                {
+                    Voxels[x, voxelPos.Y, z] = empty;
+                }
+            }
+        }
+    }
+
+    private void HandleSawDown(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    {
+        // Cuts a line 
+        if (facing != BlockFacing.UP) return;
+
+        double dx = byPlayer.Entity.Pos.X - (Pos.X + 0.5);
+        double dz = byPlayer.Entity.Pos.Z - (Pos.Z + 0.5);
+        byte empty = (byte)EnumWoodMaterial.Empty;
+
+        if (Math.Abs(dx) > Math.Abs(dz))
+        {
+            // Player is East/West (View along X). Split along X (vary X, fixed Z).
+            for (int x = 0; x < 16; x++)
+            {
+                for (int y = voxelPos.Y; y >= 0; y--)
+                {
+                    Voxels[x, voxelPos.Y, voxelPos.Z] = empty;
+                }
+            }
+        }
+        else
+        {
+            // Player is North/South (View along Z). Split along Z (vary Z, fixed X).
+            for (int z = 0; z < 16; z++)
+            {
+                for (int y = voxelPos.Y; y >= 0; y--)
+                {
+                    Voxels[voxelPos.X, voxelPos.Y, z] = empty;
+                }
+            }
+        }
+    }
+
+    private void OnChisel(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    {
+        Api.Logger.Debug($"OnChisel: {voxelPos}, {facing}");
+        HandleChisel(voxelPos);
     }
 
     private bool TryPutLog(IPlayer byPlayer)
@@ -325,34 +468,20 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player, EnumToolMode toolMode)
+    private void OnChop(Vec3i pos, BlockFacing facing, IPlayer player, int toolMode)
     {
+        EnumAxeToolModes tool = (EnumAxeToolModes)toolMode;
+
         Api.Logger.Debug($"OnChop: {pos}, {facing}, {toolMode}");
 
-        if (pos.X < 0 || pos.X >= 16 ||
-            pos.Y < 0 || pos.Y >= 16 ||
-            pos.Z < 0 || pos.Z >= 16) return;
-
-        if (Voxels[pos.X, pos.Y, pos.Z] == (byte)EnumWoodMaterial.Empty) return;
-
-        Voxels[pos.X, pos.Y, pos.Z] = (byte)EnumWoodMaterial.Empty;
-
-        if (toolMode == EnumToolMode.Precise)
-            HandlePreciseChop(pos, facing);
-
-        if (toolMode == EnumToolMode.ChopDown)
+        if (tool == EnumAxeToolModes.ChopDown)
             HandleChopDown(pos, facing, player);
 
-        if (toolMode == EnumToolMode.ChopRight)
+        if (tool == EnumAxeToolModes.ChopRight)
             HandleChopRight(pos, facing, player);
 
-        if (toolMode == EnumToolMode.ChopLeft)
+        if (tool == EnumAxeToolModes.ChopLeft)
             HandleChopLeft(pos, facing, player);
-
-
-        CheckIfFinished(player);
-        RegenSelectionBoxes();
-        MarkDirty(true);
     }
 
     private void HandleChopLeft(Vec3i pos, BlockFacing facing, IPlayer player)
@@ -371,7 +500,6 @@ public class BEChoppingBlock : BlockEntity
 
             for (int z = pos.Z; z != end; z += step)
             {
-                // Cut "all the way through" the depth (X axis)
                 if (z >= 0 && z < 16)
                 {
                     for (int x = 0; x < 16; x++)
@@ -391,7 +519,6 @@ public class BEChoppingBlock : BlockEntity
 
             for (int x = pos.X; x != end; x += step)
             {
-                // Cut "all the way through" the depth (Z axis)
                 if (x >= 0 && x < 16)
                 {
                     for (int z = 0; z < 16; z++)
@@ -419,7 +546,6 @@ public class BEChoppingBlock : BlockEntity
 
             for (int z = pos.Z; z != end; z += step)
             {
-                // Cut "all the way through" the depth (X axis)
                 if (z >= 0 && z < 16)
                 {
                     for (int x = 0; x < 16; x++)
@@ -482,9 +608,8 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void HandlePreciseChop(Vec3i pos, BlockFacing facing)
+    private void HandleChisel(Vec3i pos)
     {
-        if (facing != BlockFacing.UP) return;
         Voxels[pos.X, pos.Y, pos.Z] = (byte)EnumWoodMaterial.Empty;
     }
 

@@ -256,7 +256,6 @@ public class BEChoppingBlock : BlockEntity
     }
 
     // TODO: Make tools use durability
-    // TODO: Find out a better way to program this, will think about this.
     public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, int toolMode
     )
     {
@@ -331,7 +330,6 @@ public class BEChoppingBlock : BlockEntity
 
     private void HandleSawDown(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
     {
-        if (facing != BlockFacing.UP) return;
         double dx = byPlayer.Entity.Pos.X - (Pos.X + 0.5);
         double dz = byPlayer.Entity.Pos.Z - (Pos.Z + 0.5);
 
@@ -432,19 +430,19 @@ public class BEChoppingBlock : BlockEntity
 
     private void HandleChopDown(Vec3i pos, BlockFacing facing, IPlayer player)
     {
-        if (facing != BlockFacing.UP) return;
         double dx = player.Entity.Pos.X - (Pos.X + 0.5);
         double dz = player.Entity.Pos.Z - (Pos.Z + 0.5);
 
+        
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W, cut along X axis
-            RemoveVoxels(new Vec3i(0, pos.Y, pos.Z), new Vec3i(16, -1, pos.Z + 1), new Vec3i(1, -1, 1));
+            RemoveVoxels(new Vec3i(0, 15, pos.Z), new Vec3i(16, -1, pos.Z + 1), new Vec3i(1, -1, 1));
         }
         else
         {
             // Player N/S, cut along Z axis
-            RemoveVoxels(new Vec3i(pos.X, pos.Y, 0), new Vec3i(pos.X + 1, -1, 16), new Vec3i(1, -1, 1));
+            RemoveVoxels(new Vec3i(pos.X, 15, 0), new Vec3i(pos.X + 1, -1, 16), new Vec3i(1, -1, 1));
         }
     }
 
@@ -455,6 +453,7 @@ public class BEChoppingBlock : BlockEntity
 
     private void CheckIfFinished(IPlayer player)
     {
+        // TODO: Either make this check if there are any voxels left and make the work item null, or do it somewhere else
         if (SelectedRecipe == null) return;
 
         bool ruined = false;

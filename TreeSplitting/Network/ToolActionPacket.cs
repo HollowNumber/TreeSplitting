@@ -1,12 +1,13 @@
 using ProtoBuf;
 using TreeSplitting.BlockEntities;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 
 namespace TreeSplitting.Network;
 
 [ProtoContract]
-public class ChopPacket
+public class ToolActionPacket
 {
     [ProtoMember(1)] public BlockPos Pos;
 
@@ -19,4 +20,5 @@ public class ChopPacket
     [ProtoMember(5)] public int FaceIndex;
     
     [ProtoMember(6)] public EnumToolMode ToolMode;
+
 }

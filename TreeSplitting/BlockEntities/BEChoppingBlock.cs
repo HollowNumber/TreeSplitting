@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using TreeSplitting.Gui;
 using TreeSplitting.Network;
+using TreeSplitting.Recipes;
 using TreeSplitting.Rendering;
-using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -165,7 +165,7 @@ public class BEChoppingBlock : BlockEntity
             int srcZ = SelectedRecipe.Voxels.GetLength(2);
 
             // Allocate full 16x16x16 target (defaults to zeros)
-            this.TargetVoxels = new byte[16, 16, 16];
+            TargetVoxels = new byte[16, 16, 16];
 
             Api.Logger.Debug($"SelectedRecipe Voxels: {srcX}x{srcY}x{srcZ}");
 
@@ -262,7 +262,9 @@ public class BEChoppingBlock : BlockEntity
         dialog.TryOpen();
     }
 
-    public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode)
+    // TODO: Split up for tool usage, axe for big chops, saw for precise line work, chisel for one voxel work. 
+    public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, EnumToolMode toolMode
+        )
     {
         if (WorkItemStack == null) return;
         OnChop(voxelPos, facing, byPlayer, toolMode);
@@ -494,34 +496,27 @@ public class BEChoppingBlock : BlockEntity
         bool finished = true;
 
         for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
         {
-            for (int y = 0; y < 16; y++)
+            bool recipeNeedsWood = SelectedRecipe.Voxels[x, y, z];
+            bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
+
+            //  Check if this voxel is actually within the log's radius
+            double dist = Math.Sqrt(Math.Pow(x - 7.5, 2) + Math.Pow(z - 7.5, 2));
+            bool insideLog = dist <= 7.5;
+
+            if (recipeNeedsWood && !hasWood)
             {
-                for (int z = 0; z < 16; z++)
-                {
-                    bool recipeNeedsWood = SelectedRecipe.Voxels[x, y, z];
-                    bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
+                // Only ruin if we are INSIDE the log's radius. 
+                // If the recipe wants wood in the corner (outside radius), we ignore it.
+                if (insideLog) ruined = true;
+            }
 
-                    //  Check if this voxel is actually within the log's radius
-                    double dist = Math.Sqrt(Math.Pow(x - 7.5, 2) + Math.Pow(z - 7.5, 2));
-                    bool insideLog = dist <= 7.5;
-
-                    if (recipeNeedsWood && !hasWood)
-                    {
-                        // Only ruin if we are INSIDE the log's radius. 
-                        // If the recipe wants wood in the corner (outside radius), we ignore it.
-                        if (insideLog)
-                        {
-                            ruined = true;
-                        }
-                    }
-
-                    if (!recipeNeedsWood && hasWood)
-                    {
-                        // We still have wood that needs to be removed.
-                        finished = false;
-                    }
-                }
+            if (!recipeNeedsWood && hasWood)
+            {
+                // We still have wood that needs to be removed.
+                finished = false;
             }
         }
 

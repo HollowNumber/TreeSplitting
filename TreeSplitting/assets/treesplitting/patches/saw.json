@@ -1,0 +1,9 @@
+[
+  {
+    "op": "add",
+    "path": "/class",
+    "value": "treesplitting.itemsaw",
+    "file": "game:itemtypes/tool/saw.json",
+    "side": "Server"
+  }
+]

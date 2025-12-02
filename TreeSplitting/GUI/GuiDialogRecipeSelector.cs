@@ -7,6 +7,7 @@ using Vintagestory.API.MathTools;
 
 namespace TreeSplitting.Gui;
 
+// Shamelessly repurposed from the base game.
 public class GuiDialogRecipeSelector : GuiDialog
 {
     public Action<int> OnRecipeSelected;

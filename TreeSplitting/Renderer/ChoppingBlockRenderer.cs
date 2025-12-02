@@ -49,7 +49,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         if (collectible is Block block)
             texSource = api.Tesselator.GetTextureSource(block);
         else
-            texSource = api.Tesselator.GetTextureSource((Item)collectible);
+            texSource = api.Tesselator.GetTextureSource((Vintagestory.API.Common.Item)collectible);
 
         // Retrieve Top texture (for UP/DOWN faces - end grain/rings)
         TextureAtlasPosition topTex = texSource["up"] ?? texSource["top"];

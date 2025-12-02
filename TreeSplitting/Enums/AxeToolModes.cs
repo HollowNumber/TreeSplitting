@@ -4,6 +4,5 @@ namespace TreeSplitting.Enums;
 public enum EnumAxeToolModes : byte
 {
     ChopDown = 0,
-    ChopRight = 1,
-    ChopLeft = 2,
+    ChopSideways = 1
 }

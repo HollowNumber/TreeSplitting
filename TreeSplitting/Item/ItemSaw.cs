@@ -23,11 +23,10 @@ public class ItemSaw : Vintagestory.API.Common.Item
         {
             toolModes = ObjectCacheUtil.GetOrCreate(api, "treesplittingSawModes", () =>
             {
-                SkillItem[] modes = new SkillItem[3];
+                SkillItem[] modes = new SkillItem[2];
                 
                 modes[0] = new SkillItem(){Code = new AssetLocation("line-down"), Name = "Line"}.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpset(cr, x, y, width, height, rgba, GameMath.PI));
-                modes[1] = new SkillItem(){Code = new AssetLocation("line-right"), Name = "Line Right"}.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpset(cr, x, y, w, h, c, GameMath.PI / 2));
-                modes[2] = new SkillItem(){Code = new AssetLocation("line-left"), Name = "Line Left"}.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpset(cr, x, y, w, h, c, 3* GameMath.PI / 2) );
+                modes[1] = new SkillItem(){Code = new AssetLocation("line-sideways"), Name = "Line Sideways"}.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
 
                 return modes;
             });

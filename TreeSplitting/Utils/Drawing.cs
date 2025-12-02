@@ -242,4 +242,101 @@ public static class Drawing
 
             cr.Restore();
         }
+    
+         public static void DrawUpDown(Context cr, int x, int y, float width, float height, double[] colordoubles, double rot)
+        {
+            Pattern pattern = null;
+            Matrix matrix = cr.Matrix;
+
+            cr.Save();
+            float w = 91;
+            // Increased height to 250 to accommodate the bottom arrow
+            float h = 250; 
+            float scale = Math.Min(width / w, height / h);
+            matrix.Translate(x + Math.Max(0, (width - w * scale) / 2), y + Math.Max(0, (height - h * scale) / 2));
+            matrix.Scale(scale, scale);
+            matrix.Translate(w / 2, h / 2);
+            matrix.Rotate(rot);
+            matrix.Translate(-w / 2, -h / 2);
+
+            cr.Matrix = matrix;
+
+            cr.Operator = Operator.Over;
+            pattern = new SolidPattern(colordoubles[0], colordoubles[1], colordoubles[2], colordoubles[3]);
+            cr.SetSource(pattern);
+
+            cr.NewPath();
+            cr.MoveTo(91, 124.667969);
+            cr.CurveTo(91, 149.519531, 70.851563, 169.667969, 46, 169.667969);
+            cr.CurveTo(21.148438, 169.667969, 1, 149.519531, 1, 124.667969);
+            cr.CurveTo(1, 99.816406, 21.148438, 79.667969, 46, 79.667969);
+            cr.CurveTo(70.851563, 79.667969, 91, 99.816406, 91, 124.667969);
+            cr.ClosePath();
+            cr.MoveTo(91, 124.667969);
+            cr.Tolerance = 0.1;
+            cr.Antialias = Antialias.Default;
+            cr.FillRule = FillRule.Winding;
+            cr.FillPreserve();
+            if (pattern != null) pattern.Dispose();
+
+            cr.Operator = Operator.Over;
+            cr.LineWidth = 1;
+            cr.MiterLimit = 10;
+            cr.LineCap = LineCap.Butt;
+            cr.LineJoin = LineJoin.Miter;
+            pattern = new SolidPattern(colordoubles[0], colordoubles[1], colordoubles[2], colordoubles[3]);
+            cr.SetSource(pattern);
+
+            cr.NewPath();
+            cr.MoveTo(91, 124.667969);
+            cr.CurveTo(91, 149.519531, 70.851563, 169.667969, 46, 169.667969);
+            cr.CurveTo(21.148438, 169.667969, 1, 149.519531, 1, 124.667969);
+            cr.CurveTo(1, 99.816406, 21.148438, 79.667969, 46, 79.667969);
+            cr.CurveTo(70.851563, 79.667969, 91, 99.816406, 91, 124.667969);
+            cr.ClosePath();
+            cr.MoveTo(91, 124.667969);
+            cr.Tolerance = 0.1;
+            cr.Antialias = Antialias.Default;
+            cr.StrokePreserve();
+            if (pattern != null) pattern.Dispose();
+
+            DrawArrowShape(cr, colordoubles);
+
+            cr.Save();
+            // Rotate 180 degrees around the center of the circle (46, 124.667969)
+            cr.Translate(46, 124.667969);
+            cr.Rotate(Math.PI);
+            cr.Translate(-46, -124.667969);
+            
+            DrawArrowShape(cr, colordoubles);
+            
+            cr.Restore();
+
+            cr.Restore();
+        }
+
+        // Helper to avoid duplicating the arrow path code
+        private static void DrawArrowShape(Context cr, double[] colordoubles)
+        {
+            Pattern pattern;
+            cr.Operator = Operator.Over;
+            pattern = new SolidPattern(colordoubles[0], colordoubles[1], colordoubles[2], colordoubles[3]);
+            cr.SetSource(pattern);
+
+            cr.NewPath();
+            cr.MoveTo(82.265625, 21.296875);
+            cr.LineTo(47.160156, 0.5);
+            cr.LineTo(11.734375, 21.296875);
+            cr.LineTo(26.457031, 21.296875);
+            cr.LineTo(26.457031, 71.335938);
+            cr.LineTo(67.808594, 71.335938);
+            cr.LineTo(67.808594, 21.296875);
+            cr.ClosePath();
+            cr.MoveTo(82.265625, 21.296875);
+            cr.Tolerance = 0.1;
+            cr.Antialias = Antialias.Default;
+            cr.FillRule = FillRule.Winding;
+            cr.FillPreserve();
+            if (pattern != null) pattern.Dispose();
+        }
 }

@@ -41,7 +41,7 @@ public class ClientNetworkHandler
         ItemSlot activeSlot = _capi.World.Player.InventoryManager.ActiveHotbarSlot;
         ItemStack heldItemStack = activeSlot.Itemstack;
 
-        if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel)) return;
+        if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
 
         
         if (heldItemStack?.Item?.Tool is EnumTool.Chisel )
@@ -53,7 +53,6 @@ public class ClientNetworkHandler
                 //The game does this automatically _capi.TriggerIngameError(new AssetLocation("treesplitting"), "chiselhammer", "You need to hold a hammer in your offhand to chisel wood voxels.");
                 return;     
             }
-            
            
         }
         

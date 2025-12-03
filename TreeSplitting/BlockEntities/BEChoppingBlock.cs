@@ -276,7 +276,8 @@ public class BEChoppingBlock : BlockEntity
 
         if (heldItem.Contains("axe")) OnChop(voxelPos, facing, byPlayer, toolMode);
         if (heldItem.Contains("saw")) OnSaw(voxelPos, facing, byPlayer, toolMode);
-        if (heldItem.Contains("chisel")) OnChisel(voxelPos, facing, byPlayer);
+        // Once durability handling is in place the knife should take more durability damage than the chisel
+        if (heldItem.Contains("chisel") || heldItem.Contains("knife")) OnChiselOrKnife(voxelPos, facing, byPlayer);
 
         CheckIfFinished(byPlayer);
         RegenSelectionBoxes();
@@ -345,10 +346,10 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void OnChisel(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    private void OnChiselOrKnife(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
     {
         Api.Logger.Debug($"OnChisel: {voxelPos}, {facing}");
-        HandleChisel(voxelPos);
+        HandleOneVoxel(voxelPos);
     }
 
     private bool TryPutLog(IPlayer byPlayer)
@@ -445,7 +446,7 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void HandleChisel(Vec3i pos)
+    private void HandleOneVoxel(Vec3i pos)
     {
         Voxels[pos.X, pos.Y, pos.Z] = (byte)EnumWoodMaterial.Empty;
     }

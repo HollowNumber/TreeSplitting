@@ -1,5 +1,4 @@
-﻿using System;
-using Vintagestory.API.Common;
+﻿using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using TreeSplitting.BlockEntities;
 
@@ -7,93 +6,102 @@ namespace TreeSplitting.Blocks;
 
 public class BlockChoppingBlock : Block
 {
-    public override bool CanPlaceBlock(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel,
-        ref string failureCode)
-    {
-        if (!base.CanPlaceBlock(world, byPlayer, blockSel, ref failureCode)) return false;
+    // ============================================================================
+    // PLACEMENT LOGIC
+    // ============================================================================
 
-        // Check if the space ABOVE is free for the top part
+    public override bool TryPlaceBlock(IWorldAccessor world, IPlayer byPlayer, ItemStack itemstack, BlockSelection blockSel, ref string failureCode)
+    {
+        // 1. Check if there is space UP for the top block
         BlockPos upPos = blockSel.Position.UpCopy();
-        if (!world.BlockAccessor.GetBlock(upPos).IsReplacableBy(this))
+        Block upBlock = world.BlockAccessor.GetBlock(upPos);
+
+        if (!upBlock.IsReplacableBy(this))
         {
             failureCode = "notenoughspace";
             return false;
         }
 
+        // 2. Default placement check (ground check etc)
+        if (!base.TryPlaceBlock(world, byPlayer, itemstack, blockSel, ref failureCode)) return false;
+
         return true;
     }
 
-    public override void OnBlockPlaced(IWorldAccessor world, BlockPos blockPos, ItemStack byItemStack = null)
+    public override void OnBlockPlaced(IWorldAccessor world, BlockPos blockPos, ItemStack byItemStack)
     {
         base.OnBlockPlaced(world, blockPos, byItemStack);
 
-        // Place the invisible Top Block at pos.Up()
         BlockPos upPos = blockPos.UpCopy();
-        Block topBlock = world.GetBlock(new AssetLocation("treesplitting:choppingblocktop"));
+        Block topBlock = world.GetBlock(new AssetLocation("treesplitting:choppingblocktop")); 
+        
         if (topBlock != null)
         {
             world.BlockAccessor.SetBlock(topBlock.BlockId, upPos);
         }
     }
 
-    public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer,
-        float dropQuantityMultiplier = 1)
+    public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
     {
-        base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
-
-        // Remove Top Block if it exists
-        BlockPos upPos = pos.UpCopy();
-        Block upBlock = world.BlockAccessor.GetBlock(upPos);
-        if (upBlock.Code.Path == "choppingblocktop")
+        // Only intercept if in Creative and hitting a Voxel
+        if (byPlayer.WorldData.CurrentGameMode == EnumGameMode.Creative && byPlayer.CurrentBlockSelection.SelectionBoxIndex > 0)
         {
-            world.BlockAccessor.SetBlock(0, upPos); // Set to Air
+            if (world.BlockAccessor.GetBlockEntity(pos) is BEChoppingBlock be)
+            {
+                be.OnPlayerLeftClick(byPlayer, byPlayer.CurrentBlockSelection);
+            }
+            
+            world.BlockAccessor.GetChunkAtBlockPos(pos).MarkModified();
+            return; 
         }
+
+        base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
+        
+        BlockPos upPos = pos.UpCopy();
+        if (world.BlockAccessor.GetBlock(upPos) is BlockChoppingBlockTop)
+        {
+            world.BlockAccessor.SetBlock(0, upPos);
+        }
+    }
+
+
+    public override Cuboidf[] GetSelectionBoxes(IBlockAccessor world, BlockPos pos)
+    {
+        if (world.GetBlockEntity(pos) is BEChoppingBlock be) return be.SelectionBoxes;
+        return base.GetSelectionBoxes(world, pos);
+    }
+
+    public override Cuboidf[] GetCollisionBoxes(IBlockAccessor world, BlockPos pos)
+    {
+        if (world.GetBlockEntity(pos) is BEChoppingBlock be) return be.CollisionBoxes;
+        return base.GetCollisionBoxes(world, pos);
+    }
+
+    public override float OnGettingBroken(IPlayer player, BlockSelection blockSel, ItemSlot itemslot, float remainingResistance, float dt,
+        int counter)
+    {
+        if (api.World.BlockAccessor.GetBlockEntity(blockSel.Position) is BEChoppingBlock be)
+        {
+            if (blockSel.SelectionBoxIndex > 0)
+            {
+                if (counter == 0) be.OnPlayerLeftClick(player, blockSel);
+                return 9999999f; 
+            }
+        }
+        api.Logger.Error("Outside of selection box index");
+        return base.OnGettingBroken(player, blockSel, itemslot, remainingResistance, dt, counter);
+    }
+
+
+    public override bool DoParticalSelection(IWorldAccessor world, BlockPos pos)
+    {
+        return true;
     }
 
 
     public override bool OnBlockInteractStart(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel)
     {
-        BEChoppingBlock? be = world.BlockAccessor.GetBlockEntity(blockSel.Position) as BEChoppingBlock;
-        if (be == null) return base.OnBlockInteractStart(world, byPlayer, blockSel);
-
-        // Delegate to BE
-        return be.OnInteract(byPlayer, blockSel);
-    }
-
-
-    public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
-    {
-        BEChoppingBlock? be = blockAccessor.GetBlockEntity(pos) as BEChoppingBlock;
-
-        if (be is { SelectionBoxes.Length: > 0 })
-        {
-            Cuboidf[] combinedBoxes = (Cuboidf[])be.SelectionBoxes.Clone();
-            Cuboidf[] stumpBoxes = base.GetSelectionBoxes(blockAccessor, pos);
-
-            if (stumpBoxes.Length > 0)
-            {
-                combinedBoxes[0] = stumpBoxes[0];
-            }
-            else
-            {
-                combinedBoxes[0] = Cuboidf.Default();
-            }
-
-            return combinedBoxes;
-        }
-
-        return base.GetSelectionBoxes(blockAccessor, pos);
-    }
-
-
-    public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
-    {
-        if (blockAccessor.GetBlockEntity(pos) is BEChoppingBlock be)
-        {
-            // Ensure collision boxes aren't null
-            if (be.CollisionBoxes != null) return be.CollisionBoxes;
-        }
-
-        return base.GetCollisionBoxes(blockAccessor, pos);
+        if (world.BlockAccessor.GetBlockEntity(blockSel.Position) is BEChoppingBlock be) return be.OnInteract(byPlayer, blockSel);
+        return base.OnBlockInteractStart(world, byPlayer, blockSel);
     }
 }

@@ -2,11 +2,8 @@
 using HarmonyLib;
 using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
-using TreeSplitting.Handlers;
 using TreeSplitting.Item;
-using TreeSplitting.Network;
 using TreeSplitting.Recipes;
-using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
@@ -18,7 +15,6 @@ namespace TreeSplitting;
 public class TreeSplittingModSystem : ModSystem
 {
     //public static TreeSplittingConfig Config;
-    public static List<HewingRecipe> Recipes = new();
 
     private ICoreAPI api;
     
@@ -29,8 +25,6 @@ public class TreeSplittingModSystem : ModSystem
         base.Start(api);
         this.api = api;
 
-        api.Network.RegisterChannel("treesplitting").RegisterMessageType<ToolActionPacket>()
-            .RegisterMessageType<RecipeSelectPacket>();
 
         // Load Assets
 

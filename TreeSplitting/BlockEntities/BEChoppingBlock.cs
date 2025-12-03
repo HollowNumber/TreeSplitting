@@ -37,7 +37,6 @@ public class BEChoppingBlock : BlockEntity
     public byte[,,] TargetVoxels = null;
     public int SelectedRecipeId = -1;
 
-    // Inventory System
     public ItemStack WorkItemStack;
 
     // Visuals & Selection
@@ -60,7 +59,7 @@ public class BEChoppingBlock : BlockEntity
 
 
         WorkItemStack?.ResolveBlockOrItem(api.World);
-        
+
         // If client, setup renderer
         if (api is ICoreClientAPI capi)
         {
@@ -92,13 +91,13 @@ public class BEChoppingBlock : BlockEntity
     public override void ToTreeAttributes(ITreeAttribute tree)
     {
         base.ToTreeAttributes(tree);
-        
+
         // Save Inventory
         if (WorkItemStack != null)
         {
             tree.SetItemstack("workItem", WorkItemStack);
         }
-        
+
         // Save State
         tree.SetInt("selectedRecipeId", SelectedRecipeId);
         tree.SetBytes("voxels", SerializeVoxels());
@@ -107,14 +106,14 @@ public class BEChoppingBlock : BlockEntity
     public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldAccessForResolve)
     {
         base.FromTreeAttributes(tree, worldAccessForResolve);
-        
+
         // Load Inventory
         WorkItemStack = tree.GetItemstack("workItem");
 
         if (WorkItemStack != null)
         {
             WorkItemStack.ResolveBlockOrItem(worldAccessForResolve);
-            
+
             // Load Voxels
             byte[] packedVoxels = tree.GetBytes("voxels");
             if (packedVoxels != null) DeserializeVoxels(packedVoxels);
@@ -157,6 +156,7 @@ public class BEChoppingBlock : BlockEntity
             byte v3 = Voxels[x, y, z + 3];
             data[pos++] = (byte)((v0 & 0x3) | ((v1 & 0x3) << 2) | ((v2 & 0x3) << 4) | ((v3 & 0x3) << 6));
         }
+
         return data;
     }
 
@@ -170,7 +170,7 @@ public class BEChoppingBlock : BlockEntity
         for (int z = 0; z < 16; z += 4)
         {
             byte packed = data[pos++];
-            Voxels[x, y, z]     = (byte)(packed & 0x3);
+            Voxels[x, y, z] = (byte)(packed & 0x3);
             Voxels[x, y, z + 1] = (byte)((packed >> 2) & 0x3);
             Voxels[x, y, z + 2] = (byte)((packed >> 4) & 0x3);
             Voxels[x, y, z + 3] = (byte)((packed >> 6) & 0x3);
@@ -184,7 +184,6 @@ public class BEChoppingBlock : BlockEntity
 
     public override void OnReceivedClientPacket(IPlayer fromPlayer, int packetid, byte[] data)
     {
-        // 1. SELECT RECIPE
         if (packetid == (int)EnumHewingPacket.SelectRecipe)
         {
             int recipeId = SerializerUtil.Deserialize<int>(data);
@@ -192,18 +191,17 @@ public class BEChoppingBlock : BlockEntity
             MarkDirty();
             return;
         }
-        
-        // 2. CANCEL SELECT
+
         if (packetid == (int)EnumHewingPacket.CancelSelect)
         {
             if (SelectedRecipeId == -1 && WorkItemStack != null)
             {
                 TryTakeLog(fromPlayer);
             }
+
             return;
         }
-        
-        // 3. TOOL USE (VOXELS)
+
         if (packetid == (int)EnumHewingPacket.OnUseOver)
         {
             using (MemoryStream ms = new MemoryStream(data))
@@ -220,32 +218,31 @@ public class BEChoppingBlock : BlockEntity
 
                 OnUseOver(fromPlayer, voxelPos, face, toolMode);
             }
+
             return;
         }
-        
+
         base.OnReceivedClientPacket(fromPlayer, packetid, data);
     }
 
     public override void OnReceivedServerPacket(int packetid, byte[] data)
     {
-        // 4. OPEN DIALOG
         if (packetid == (int)EnumHewingPacket.OpenDialog)
         {
             OpenRecipeDialog();
             return;
         }
+
         base.OnReceivedServerPacket(packetid, data);
     }
 
     #endregion
 
-   
-    
 
     public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
     {
         bool isShift = byPlayer.Entity.Controls.ShiftKey;
-        
+
         if (WorkItemStack == null && isShift) return TryPutLog(byPlayer);
         if (WorkItemStack != null && isShift) return TryTakeLog(byPlayer);
 
@@ -263,24 +260,23 @@ public class BEChoppingBlock : BlockEntity
     {
         if (Api.Side != EnumAppSide.Client || sel == null) return;
 
-        
+
         ItemStack heldStack = player.InventoryManager.ActiveHotbarSlot.Itemstack;
         if (heldStack == null) return;
-        
+
 
         string itemCode = heldStack.Item.Code.Path;
         if (!itemCode.Contains("axe") && !itemCode.Contains("saw") && !itemCode.Contains("chisel")) return;
 
-        // Offhand Check for Chisel
         if (itemCode.Contains("chisel"))
         {
             ItemStack offhand = player.InventoryManager.OffhandHotbarSlot.Itemstack;
-            if (offhand == null || !offhand.Item.Code.Path.Contains("hammer")) return; 
+            if (offhand == null || !offhand.Item.Code.Path.Contains("hammer")) return;
         }
 
-        // 1. Find Voxel from Selection Box
         int index = sel.SelectionBoxIndex;
-        Api.Logger.Warning($"[Debug] Left Click detected. Index: {index}, Total Boxes: {SelectionBoxToVoxelCoords.Count}");
+        Api.Logger.Warning(
+            $"[Debug] Left Click detected. Index: {index}, Total Boxes: {SelectionBoxToVoxelCoords.Count}");
         if (index >= 0 && index < SelectionBoxToVoxelCoords.Count)
         {
             Vec3i voxelPos = SelectionBoxToVoxelCoords[index];
@@ -290,20 +286,21 @@ public class BEChoppingBlock : BlockEntity
                 Api.Logger.Warning("[Debug] Hit Index 0 (Stump). Ignoring.");
                 return;
             }
-            
+
             Api.Logger.Warning($"[Debug] Hit Voxel at {voxelPos}");
 
-                string anim = heldStack.Item.GetHeldTpHitAnimation(player.InventoryManager.ActiveHotbarSlot, player.Entity) ?? "axehit";
-                player.Entity.StartAnimation(anim);
-                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
+            string anim =
+                heldStack.Item.GetHeldTpHitAnimation(player.InventoryManager.ActiveHotbarSlot, player.Entity) ??
+                "axehit";
+            player.Entity.StartAnimation(anim);
+            Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
 
-                int toolMode = heldStack.Attributes.GetInt("toolMode");
-                SendUseOverPacket(voxelPos, sel.Face, toolMode);
+            int toolMode = heldStack.Attributes.GetInt("toolMode");
+            SendUseOverPacket(voxelPos, sel.Face, toolMode);
         }
         else
         {
             Api.Logger.Error($"[Debug] Index {index} is out of bounds!");
-
         }
     }
 
@@ -319,19 +316,56 @@ public class BEChoppingBlock : BlockEntity
             writer.Write(toolMode);
 
             ((ICoreClientAPI)Api).Network.SendBlockEntityPacket(
-                Pos, 
-                (int)EnumHewingPacket.OnUseOver, 
+                Pos,
+                (int)EnumHewingPacket.OnUseOver,
                 ms.ToArray()
             );
         }
     }
 
+    protected void SendUseOverPacket(IPlayer byPlayer, Vec3i voxelPos, BlockSelection blockSel)
+    {
+        if (!(Api is ICoreClientAPI capi)) return;
+        if (voxelPos == null || blockSel == null) return;
+
+        ItemSlot slot = byPlayer?.InventoryManager?.ActiveHotbarSlot;
+        int toolMode = 0;
+        try
+        {
+            if (slot?.Itemstack != null)
+            {
+                toolMode = slot.Itemstack.Collectible.GetToolMode(slot, byPlayer, blockSel);
+            }
+        }
+        catch
+        {
+            toolMode = 0;
+        }
+
+        byte faceIdx = (byte)(blockSel.Face?.Index ?? 0);
+
+        using (MemoryStream ms = new MemoryStream())
+        {
+            BinaryWriter writer = new BinaryWriter(ms);
+            writer.Write(voxelPos.X);
+            writer.Write(voxelPos.Y);
+            writer.Write(voxelPos.Z);
+            writer.Write(faceIdx);
+            writer.Write(toolMode);
+
+            capi.Network.SendBlockEntityPacket(
+                Pos,
+                (int)EnumHewingPacket.OnUseOver,
+                ms.ToArray()
+            );
+        }
+    }
 
     private bool TryPutLog(IPlayer byPlayer)
     {
         ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
         if (slot.Empty) return false;
-        
+
         // Check recipe valid
         bool isWorkable = Api.GetHewingRecipes().Any(r => r.Matches(Api.World, slot.Itemstack));
         if (!isWorkable) return false;
@@ -348,19 +382,20 @@ public class BEChoppingBlock : BlockEntity
         // Tell Client to Open Dialog
         if (Api.Side == EnumAppSide.Server)
         {
-            ((ICoreServerAPI)Api).Network.SendBlockEntityPacket(byPlayer as IServerPlayer, Pos, (int)EnumHewingPacket.OpenDialog);
+            ((ICoreServerAPI)Api).Network.SendBlockEntityPacket(byPlayer as IServerPlayer, Pos,
+                (int)EnumHewingPacket.OpenDialog);
         }
-        
+
         return true;
     }
 
     private bool TryTakeLog(IPlayer byPlayer)
     {
         if (WorkItemStack == null) return false;
-        
+
         if (!byPlayer.InventoryManager.TryGiveItemstack(WorkItemStack))
             Api.World.SpawnItemEntity(WorkItemStack, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
-        
+
         ResetBlock();
 
         if (Api.Side == EnumAppSide.Client) dialog?.TryClose();
@@ -393,16 +428,16 @@ public class BEChoppingBlock : BlockEntity
         dialog = new GuiDialogBlockEntityRecipeSelector(
             "Select Recipe",
             stacks,
-            (selectedIndex) => {
-                if (selectedIndex >= 0 && selectedIndex < matching.Count) {
+            (selectedIndex) =>
+            {
+                if (selectedIndex >= 0 && selectedIndex < matching.Count)
+                {
                     var recipe = matching[selectedIndex];
                     byte[] data = SerializerUtil.Serialize(recipe.RecipeId);
                     capi.Network.SendBlockEntityPacket(Pos, (int)EnumHewingPacket.SelectRecipe, data);
                 }
             },
-            () => {
-                capi.Network.SendBlockEntityPacket(Pos, (int)EnumHewingPacket.CancelSelect, null);
-            },
+            () => { capi.Network.SendBlockEntityPacket(Pos, (int)EnumHewingPacket.CancelSelect, null); },
             Pos,
             capi
         );
@@ -412,24 +447,21 @@ public class BEChoppingBlock : BlockEntity
     public Cuboidf[] GetTopBlockBoxes()
     {
         List<Cuboidf> topBoxes = new List<Cuboidf>();
-        
-        // Loop through all boxes (voxels + stump)
+
         for (int i = 0; i < SelectionBoxes.Length; i++)
         {
             Cuboidf box = SelectionBoxes[i];
-            
+
             // If this box goes higher than 1.0 (into the block above)
             if (box.Y2 > 1.0f)
             {
-                // Shift it down by 1.0 so it renders correctly in the top block's local space
-                // Example: A box from 0.9 to 1.5 becomes -0.1 to 0.5
-                // We clamp Y1 to 0 so we don't select the air below the top block
                 float localY1 = Math.Max(0f, box.Y1 - 1.0f);
                 float localY2 = box.Y2 - 1.0f;
-                
+
                 topBoxes.Add(new Cuboidf(box.X1, localY1, box.Z1, box.X2, localY2, box.Z2));
             }
         }
+        
         return topBoxes.ToArray();
     }
 
@@ -438,7 +470,7 @@ public class BEChoppingBlock : BlockEntity
     {
         // We need to find which REAL Voxel corresponds to this "Top Box Index"
         int currentTopIndex = 0;
-        
+
         for (int i = 0; i < SelectionBoxes.Length; i++)
         {
             if (SelectionBoxes[i].Y2 > 1.0f)
@@ -447,26 +479,134 @@ public class BEChoppingBlock : BlockEntity
                 if (currentTopIndex == topBoxIndex)
                 {
                     // FOUND IT! 'i' is the real index in the main SelectionBoxes array
-                    BlockSelection fakeSel = new BlockSelection() { 
-                        SelectionBoxIndex = i, 
+                    BlockSelection fakeSel = new BlockSelection()
+                    {
+                        SelectionBoxIndex = i,
                         Face = BlockFacing.UP,
                         Position = Pos // Important: Use the Bottom Block's pos
-                    }; 
-                    
+                    };
+
                     // Forward to the main logic
                     OnPlayerLeftClick(player, fakeSel);
                     return;
                 }
+
                 currentTopIndex++;
             }
         }
+    }
+
+    public void OnTopBlockUseOver(IPlayer player, int topBoxIndex)
+    {
+        int currentTopCount = 0;
+        int realIndex = -1;
+
+        for (int i = 0; i < SelectionBoxes.Length; i++)
+        {
+            // Check if this box belongs to the Top Layer
+            if (SelectionBoxes[i].Y2 > 1.0f)
+            {
+                if (currentTopCount == topBoxIndex)
+                {
+                    realIndex = i;
+                    break;
+                }
+                currentTopCount++;
+            }
+        }
+
+        if (realIndex != -1)
+        {
+            OnUseOver(player, realIndex);
+        }
+        else
+        {
+            // api.Logger.Warning($"Could not map Top Index {topBoxIndex} to Real Index");
+        }
+    }
+
+    internal void OnUseOver(IPlayer byPlayer, int selectionBoxIndex)
+    {
+        if (selectionBoxIndex <= 0 || selectionBoxIndex >= SelectionBoxes.Length) return;
+
+        Cuboidf box = SelectionBoxes[selectionBoxIndex];
+
+        // yStart used when generating selection boxes (see RegenSelectionBoxes)
+        int yStart = 10;
+        int x = (int)(16f * box.X1);
+        int y = (int)(16f * box.Y1) - yStart; // subtract the yStart offset
+        int z = (int)(16f * box.Z1);
+
+        // Clamp to valid voxel range
+        x = Math.Max(0, Math.Min(15, x));
+        y = Math.Max(0, Math.Min(15, y));
+        z = Math.Max(0, Math.Min(15, z));
+
+        Vec3i voxelPos = new Vec3i(x, y, z);
+        Api.Logger.Debug($"selectionBoxIndex: {selectionBoxIndex} -> voxelPos: {voxelPos}");
+
+        OnUseOver(byPlayer, voxelPos, new BlockSelection() { SelectionBoxIndex = selectionBoxIndex, Position = Pos });
+    }
+
+    internal void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockSelection blockSel)
+    {
+        if (voxelPos == null)
+        {
+            return;
+        }
+
+        if (SelectedRecipe == null)
+        {
+            return;
+        }
+
+        if (Api.Side == EnumAppSide.Client)
+        {
+            SendUseOverPacket(byPlayer, voxelPos, blockSel);
+        }
+
+
+        ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
+        if (slot.Itemstack == null)
+        {
+            return;
+        }
+
+        int toolMode = slot.Itemstack.Collectible.GetToolMode(slot, byPlayer, blockSel);
+
+        float yaw = GameMath.Mod(byPlayer.Entity.Pos.Yaw, 2 * GameMath.PI);
+
+
+        EnumVoxelMaterial voxelMat = (EnumVoxelMaterial)Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z];
+
+        if (voxelMat != EnumVoxelMaterial.Empty)
+        {
+            switch (toolMode)
+            {
+                case 0:
+                {
+                    HandleSawDown(voxelPos, blockSel.Face, byPlayer);
+                }
+                    break;
+                case 1: HandleSawSideways(voxelPos, byPlayer); break;
+            }
+
+            RegenSelectionBoxes();
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+            Api.World.BlockAccessor.MarkBlockEntityDirty(Pos);
+            slot.Itemstack.Collectible.DamageItem(Api.World, byPlayer.Entity, slot);
+        }
+
+        CheckIfFinished(byPlayer);
+        MarkDirty();
     }
 
     public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, int toolMode)
     {
         if (WorkItemStack == null) return;
 
-        if (voxelPos.X < 0 || voxelPos.X >= 16 || voxelPos.Y < 0 || voxelPos.Y >= 16 || voxelPos.Z < 0 || voxelPos.Z >= 16) return;
+        if (voxelPos.X < 0 || voxelPos.X >= 16 || voxelPos.Y < 0 || voxelPos.Y >= 16 || voxelPos.Z < 0 ||
+            voxelPos.Z >= 16) return;
         if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] == (byte)EnumWoodMaterial.Empty) return;
 
         ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
@@ -503,7 +643,8 @@ public class BEChoppingBlock : BlockEntity
         Api.Logger.Debug($"OnSaw: {voxelPos}, {facing}, {toolMode}");
 
         if (tool == EnumSawToolModes.SawDown) HandleSawDown(voxelPos, facing, byPlayer);
-        else if (facing != BlockFacing.UP && tool == EnumSawToolModes.SawSideways) HandleSawSideways(voxelPos, byPlayer);
+        else if (facing != BlockFacing.UP && tool == EnumSawToolModes.SawSideways)
+            HandleSawSideways(voxelPos, byPlayer);
     }
 
     private void OnChiselOrKnife(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
@@ -547,12 +688,14 @@ public class BEChoppingBlock : BlockEntity
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W
-            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16),
+                new Vec3i(1, 1, 1));
         }
         else
         {
             // Player N/S
-            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1),
+                new Vec3i(1, 1, 1));
         }
     }
 
@@ -564,12 +707,14 @@ public class BEChoppingBlock : BlockEntity
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W
-            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1),
+                new Vec3i(1, 1, 1));
         }
         else
         {
             // Player N/S
-            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16),
+                new Vec3i(1, 1, 1));
         }
     }
 
@@ -637,7 +782,8 @@ public class BEChoppingBlock : BlockEntity
 
         if (ruined)
         {
-            Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), 2), Pos.ToVec3d().Add(0.5, 1, 0.5));
+            Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), 2),
+                Pos.ToVec3d().Add(0.5, 1, 0.5));
             Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
             ResetBlock();
             return;
@@ -651,7 +797,7 @@ public class BEChoppingBlock : BlockEntity
             ResetBlock();
         }
     }
-    
+
 
     private void GenerateTargetVoxels()
     {
@@ -687,6 +833,7 @@ public class BEChoppingBlock : BlockEntity
             Api?.Logger?.Error("GenerateTargetVoxels failed: {0}", ex.Message);
             TargetVoxels = null;
         }
+
         MarkDirty(true);
     }
 
@@ -700,7 +847,7 @@ public class BEChoppingBlock : BlockEntity
 
         List<Cuboidf> selectionBoxes = new List<Cuboidf>();
         List<Cuboidf> collisionBoxes = new List<Cuboidf>();
-        
+
         // Clear Map
         SelectionBoxToVoxelCoords.Clear();
 
@@ -747,7 +894,7 @@ public class BEChoppingBlock : BlockEntity
                                 x / 16f, py / 16f, z / 16f,
                                 (x + 1) / 16f, (py + 1) / 16f, (z + 1) / 16f
                             ));
-                            
+
                             // Map box index to coordinate
                             SelectionBoxToVoxelCoords.Add(new Vec3i(x, y, z));
                         }

@@ -1,14 +1,55 @@
-﻿using Vintagestory.API.Common;
+﻿using System.Collections.Generic;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Item;
+using Vintagestory.API.Client;
+using Vintagestory.API.Util;
+using Vintagestory.GameContent;
 
 namespace TreeSplitting.Blocks;
 
 public class BlockChoppingBlock : Block
 {
-    // ============================================================================
-    // PLACEMENT LOGIC
-    // ============================================================================
+    WorldInteraction[] interactions;
+
+    public override void OnLoaded(ICoreAPI api)
+    {
+        base.OnLoaded(api);
+        if (api.Side != EnumAppSide.Client) return;
+        
+        interactions = ObjectCacheUtil.GetOrCreate(api, "choppingblock-interactions", () =>
+        {
+            List<ItemStack> toolStacks = [];
+
+            foreach (Vintagestory.API.Common.Item worldItem in api.World.Items)
+            {
+                if (worldItem.Code == null) continue;
+                
+                if (worldItem is ItemAxe or ItemSaw or ItemChisel) toolStacks.Add(new ItemStack(worldItem));
+            }
+            
+            return new[] {
+                new WorldInteraction()
+                {
+                    ActionLangCode = "treesplitting-chop",
+                    MouseButton = EnumMouseButton.Left, // Capture Left Click
+                    Itemstacks = toolStacks.ToArray(), // Allow any item (we check in BE) or specify Axes here
+                    GetMatchingStacks = (wi, bs, es) => {
+                        // Only capture if hitting a voxel
+                        BEChoppingBlock be = api.World.BlockAccessor.GetBlockEntity(bs.Position) as BEChoppingBlock;
+                        return be?.WorkItemStack == null ? null : wi.Itemstacks;
+                    }
+                }
+            };
+        });
+
+    }
+    
+    public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer)
+    {
+        return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
+    }
 
     public override bool TryPlaceBlock(IWorldAccessor world, IPlayer byPlayer, ItemStack itemstack, BlockSelection blockSel, ref string failureCode)
     {
@@ -40,21 +81,14 @@ public class BlockChoppingBlock : Block
             world.BlockAccessor.SetBlock(topBlock.BlockId, upPos);
         }
     }
+    
+    public override Cuboidf[] GetParticleCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
+    {
+        return GetSelectionBoxes(blockAccessor, pos);
+    }
 
     public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
     {
-        // Only intercept if in Creative and hitting a Voxel
-        if (byPlayer.WorldData.CurrentGameMode == EnumGameMode.Creative && byPlayer.CurrentBlockSelection.SelectionBoxIndex > 0)
-        {
-            if (world.BlockAccessor.GetBlockEntity(pos) is BEChoppingBlock be)
-            {
-                be.OnPlayerLeftClick(byPlayer, byPlayer.CurrentBlockSelection);
-            }
-            
-            world.BlockAccessor.GetChunkAtBlockPos(pos).MarkModified();
-            return; 
-        }
-
         base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
         
         BlockPos upPos = pos.UpCopy();
@@ -77,20 +111,6 @@ public class BlockChoppingBlock : Block
         return base.GetCollisionBoxes(world, pos);
     }
 
-    public override float OnGettingBroken(IPlayer player, BlockSelection blockSel, ItemSlot itemslot, float remainingResistance, float dt,
-        int counter)
-    {
-        if (api.World.BlockAccessor.GetBlockEntity(blockSel.Position) is BEChoppingBlock be)
-        {
-            if (blockSel.SelectionBoxIndex > 0)
-            {
-                if (counter == 0) be.OnPlayerLeftClick(player, blockSel);
-                return 9999999f; 
-            }
-        }
-        api.Logger.Error("Outside of selection box index");
-        return base.OnGettingBroken(player, blockSel, itemslot, remainingResistance, dt, counter);
-    }
 
 
     public override bool DoParticalSelection(IWorldAccessor world, BlockPos pos)

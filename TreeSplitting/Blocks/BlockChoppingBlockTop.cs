@@ -1,40 +1,60 @@
+using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Item;
 using Vintagestory.API.Client;
+using Vintagestory.API.Util;
+using Vintagestory.GameContent;
 
 namespace TreeSplitting.Blocks;
 
 public class BlockChoppingBlockTop : Block
 {
+    
     WorldInteraction[] interactions;
+
+    
 
     public override void OnLoaded(ICoreAPI api)
     {
         base.OnLoaded(api);
         if (api.Side != EnumAppSide.Client) return;
+        
+        
+        interactions = ObjectCacheUtil.GetOrCreate(api, "choppingblocktop-interactions", () =>
+        {
+            List<ItemStack> toolStacks = [];
 
-        interactions = new WorldInteraction[] {
-            new WorldInteraction()
+            foreach (Vintagestory.API.Common.Item worldItem in api.World.Items)
             {
-                ActionLangCode = "treesplitting-chop",
-                MouseButton = EnumMouseButton.Left, // Capture Left Click
-                Itemstacks = null, // Allow any item (we check in BE) or specify Axes here
-                GetMatchingStacks = (wi, bs, es) => {
-                    // Only capture if hitting a voxel
-                    if (bs.SelectionBoxIndex > 0) return wi.Itemstacks;
-                    return null;
-                }
+                if (worldItem.Code == null) continue;
+                
+                if (worldItem is ItemAxe or ItemSaw or ItemChisel) toolStacks.Add(new ItemStack(worldItem));
             }
-        };
+            
+            return new[] {
+                new WorldInteraction()
+                {
+                    ActionLangCode = "treesplitting-chop",
+                    MouseButton = EnumMouseButton.Left, 
+                    Itemstacks = toolStacks.ToArray(), 
+                    GetMatchingStacks = (wi, bs, es) => {
+                        BEChoppingBlock be = api.World.BlockAccessor.GetBlockEntity(bs.Position.DownCopy()) as BEChoppingBlock;
+                        return be?.WorkItemStack == null ? null : wi.Itemstacks;
+                    }
+                }
+            };
+        });
+
     }
     
     public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer)
     {
-        // Fix this at some point
         return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
     }
+    
     
     public override Cuboidf[] GetSelectionBoxes(IBlockAccessor world, BlockPos pos)
     {
@@ -42,28 +62,14 @@ public class BlockChoppingBlockTop : Block
         {
             return be.GetTopBlockBoxes(); 
         }
-        return new Cuboidf[0];
+        return [];
     }
 
     public override Cuboidf[] GetCollisionBoxes(IBlockAccessor world, BlockPos pos)
     {
-        return new Cuboidf[0];
+        return [];
     }
 
-    public override float OnGettingBroken(IPlayer player, BlockSelection blockSel, ItemSlot itemslot, float remainingResistance, float dt,
-        int counter)
-    {
-        if (api.World.BlockAccessor.GetBlockEntity(blockSel.Position.DownCopy()) is BEChoppingBlock be)
-        {
-            
-            if (counter == 0)
-            {
-                be.OnTopBlockLeftClick(player, blockSel.SelectionBoxIndex);
-            }
-            return 9999999f; 
-        }
-        return base.OnGettingBroken(player, blockSel, itemslot, remainingResistance, dt, counter);
-    }
 
     public override bool OnBlockInteractStart(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel)
     {
@@ -94,6 +100,6 @@ public class BlockChoppingBlockTop : Block
     
     public override ItemStack[] GetDrops(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
     {
-        return null;
+        return null!;
     }
 }

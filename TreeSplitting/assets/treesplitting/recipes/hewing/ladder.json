@@ -1,5 +1,4 @@
 {
-  "code": "hewing-ladder",
   "ingredient": {
     "type": "block",
     "code": "game:log-*-ud",

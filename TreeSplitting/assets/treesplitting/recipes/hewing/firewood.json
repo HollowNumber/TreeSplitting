@@ -1,6 +1,4 @@
 {
-  "code": "hewing-firewood",
-  "toolmode": "hewing",
   "ingredient": {
     "type": "block",
     "code": "game:log-*-ud",

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using HarmonyLib;
 using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
@@ -37,7 +36,6 @@ public class TreeSplittingModSystem : ModSystem
 
         // Load Assets
 
-        LoadRecipes(api);
 
         string modid = Mod.Info.ModID;
 
@@ -56,6 +54,7 @@ public class TreeSplittingModSystem : ModSystem
         api.RegisterItemClass(modid + ".itemsaw", typeof(ItemSaw));
         
     }
+    
 
 
     public override void Dispose()
@@ -63,28 +62,6 @@ public class TreeSplittingModSystem : ModSystem
         base.Dispose();
         
         patcher?.UnpatchAll(Mod.Info.ModID);
-    }
-
-    private static void LoadRecipes(ICoreAPI api)
-    {
-        //Recipes.Clear();
-
-        var recipes = api.Assets.GetMany<HewingRecipe>(api.Logger, "recipes/hewing");
-        
-
-        foreach (var entry in recipes)
-        {
-            HewingRecipe recipe = entry.Value;
-            recipe.Code = entry.Key;
-
-            recipe.Resolve(api.World);
-            Recipes.Add(recipe);
-        }
-        
-        // Deduplicate
-        Recipes = Recipes.GroupBy(r => r.Code).Select(g => g.First()).ToList();
-
-        api.Logger.Notification("Loaded {0} tree splitting recipes", Recipes.Count);
     }
 
     public override void StartClientSide(ICoreClientAPI api)

@@ -8,5 +8,5 @@ public class RecipeSelectPacket
 {
     [ProtoMember(1)] public BlockPos Pos;
 
-    [ProtoMember(2)] public string RecipeCode;
+    [ProtoMember(2)] public int RecipeId;
 }

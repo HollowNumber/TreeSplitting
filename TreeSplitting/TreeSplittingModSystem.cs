@@ -20,8 +20,6 @@ public class TreeSplittingModSystem : ModSystem
     //public static TreeSplittingConfig Config;
     public static List<HewingRecipe> Recipes = new();
 
-    private ClientNetworkHandler _clientNetworkHandler;
-    private ServerNetworkHandler _serverNetworkHandler;
     private ICoreAPI api;
     
     private Harmony patcher;
@@ -64,18 +62,5 @@ public class TreeSplittingModSystem : ModSystem
         patcher?.UnpatchAll(Mod.Info.ModID);
     }
 
-    public override void StartClientSide(ICoreClientAPI api)
-    {
-        base.StartClientSide(api);
-
-        _clientNetworkHandler = new ClientNetworkHandler(api);
-    }
-
-    public override void StartServerSide(ICoreServerAPI api)
-    {
-        base.StartServerSide(api);
-
-        _serverNetworkHandler = new ServerNetworkHandler(api);
-    }
 
 }

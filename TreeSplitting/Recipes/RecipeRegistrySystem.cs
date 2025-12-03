@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
 
 namespace TreeSplitting.Recipes;
 
@@ -15,6 +16,25 @@ public static class TreeSplittingAdditions
     public static void RegisterHewingRecipe(this ICoreAPI api, VSAPIHewingRecipe recipe)
     {
         api.ModLoader.GetModSystem<RecipeRegistrySystem>().RegisterHewingRecipe(recipe);
+    }
+
+
+    public static List<VSAPIHewingRecipe> GetMatchingHewingRecipes(this ItemStack stack, IWorldAccessor worldAccessor)
+    {
+        List<VSAPIHewingRecipe> allRecipes = worldAccessor.Api.GetHewingRecipes();
+        List<VSAPIHewingRecipe> matching = [];
+
+        if (stack == null) return matching;
+
+        foreach (var recipe in allRecipes)
+        {
+            if (recipe.Matches(worldAccessor, stack))
+            {
+                matching.Add(recipe);
+            }
+        }
+        
+        return matching;
     }
 }
 

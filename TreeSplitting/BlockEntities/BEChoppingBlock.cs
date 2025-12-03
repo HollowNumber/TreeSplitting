@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using TreeSplitting.Gui;
 using TreeSplitting.Network;
 using TreeSplitting.Recipes;
 using TreeSplitting.Rendering;
@@ -10,6 +10,9 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using TreeSplitting.Enums;
+using Vintagestory.API.Server;
+using Vintagestory.API.Util;
+using Vintagestory.GameContent;
 
 namespace TreeSplitting.BlockEntities;
 
@@ -21,42 +24,50 @@ public enum EnumWoodMaterial : byte
     Bark = 3,
 }
 
+// Potential rename to BEChoppingStation?
 public class BEChoppingBlock : BlockEntity
 {
     public byte[,,] Voxels = new byte[16, 16, 16];
     public byte[,,] TargetVoxels = null;
 
-    public ItemStack? WorkItemStack;
-    public AssetLocation? SelectedRecipeCode;
-    public HewingRecipe? SelectedRecipe; // Runtime only
+    public ItemStack WorkItemStack => workItemStack;
+
+    public VSAPIHewingRecipe SelectedRecipe
+    {
+        get { return Api.GetHewingRecipes().FirstOrDefault(r => r.RecipeId == SelectedRecipeId); }
+    }
+
+    internal InventoryGeneric inventory;
+
+    public ItemSlot WorkSlot => inventory[0];
+
+
+    private ItemStack workItemStack;
+    public int SelectedRecipeId = -1;
 
     // Visuals
     public Cuboidf[] SelectionBoxes = [];
     public Cuboidf[] CollisionBoxes = [];
     WoodWorkItemRenderer renderer;
-    GuiDialogRecipeSelector dialog;
+    GuiDialogBlockEntityRecipeSelector dialog;
 
 
     public override void Initialize(ICoreAPI api)
     {
         base.Initialize(api);
+        inventory = new InventoryGeneric(1, null, null);
+        workItemStack?.ResolveBlockOrItem(api.World);
 
-        if (SelectedRecipeCode != null)
+        if (api is ICoreClientAPI capi)
         {
-            SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
-
-            // Re-Generate Target Voxels for Visuals
-            if (SelectedRecipe != null)
+            if (SelectedRecipeId != -1)
             {
                 GenerateTargetVoxels();
             }
-        }
 
-        if (api.Side == EnumAppSide.Client)
-        {
-            renderer = new WoodWorkItemRenderer(this, Pos, api as ICoreClientAPI);
+            renderer = new WoodWorkItemRenderer(this, Pos, capi);
 
-            (api as ICoreClientAPI)?.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque);
+            capi.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque);
 
             RegenSelectionBoxes();
         }
@@ -66,7 +77,8 @@ public class BEChoppingBlock : BlockEntity
     public override void ToTreeAttributes(ITreeAttribute tree)
     {
         base.ToTreeAttributes(tree);
-        tree.SetItemstack("workItem", WorkItemStack);
+        inventory.ToTreeAttributes(tree);
+        tree.SetInt("selectedRecipeId", SelectedRecipeId);
 
         if (Voxels != null)
         {
@@ -79,20 +91,18 @@ public class BEChoppingBlock : BlockEntity
 
             tree.SetBytes("voxels", flatVoxels);
         }
-
-        if (SelectedRecipeCode != null) tree.SetString("recipeCode", SelectedRecipeCode.ToString());
     }
 
     public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldAccessForResolve)
     {
         base.FromTreeAttributes(tree, worldAccessForResolve);
-        WorkItemStack = tree.GetItemstack("workItem");
+        inventory.FromTreeAttributes(tree);
 
-        if (WorkItemStack != null)
+        if (!WorkSlot.Empty)
         {
-            WorkItemStack.ResolveBlockOrItem(worldAccessForResolve);
+            WorkSlot.Itemstack.ResolveBlockOrItem(worldAccessForResolve);
 
-            // UNFLATTEN 1D Array -> 3D Array
+            // Restore Voxels
             byte[] flatVoxels = tree.GetBytes("voxels");
             if (flatVoxels is { Length: 4096 })
             {
@@ -104,22 +114,23 @@ public class BEChoppingBlock : BlockEntity
                     Voxels[x, y, z] = flatVoxels[i++];
             }
 
-            string code = tree.GetString("recipeCode");
-            if (code != null)
+            // CHANGED: Load ID
+            int newRecipeId = tree.GetInt("recipeId", -1);
+
+            if (SelectedRecipeId != newRecipeId)
             {
-                SelectedRecipeCode = new AssetLocation(code);
-                SelectedRecipe =
-                    TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
+                SelectedRecipeId = newRecipeId;
 
-                Api.Logger.Debug($"Resolved Recipe {SelectedRecipeCode} for Chopping Block at {Pos}");
-
-                if (SelectedRecipe != null) GenerateTargetVoxels();
+                if (Api?.Side == EnumAppSide.Client && SelectedRecipe != null)
+                {
+                    GenerateTargetVoxels();
+                }
             }
         }
         else
         {
             Voxels = new byte[16, 16, 16];
-            SelectedRecipe = null;
+            SelectedRecipeId = -1;
             TargetVoxels = null;
         }
 
@@ -127,26 +138,19 @@ public class BEChoppingBlock : BlockEntity
         MarkDirty(true);
     }
 
-    public void SetSelectedRecipe(AssetLocation code)
-    {
-        SelectedRecipeCode = code;
-        SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
-        if (SelectedRecipe != null)
-        {
-            GenerateTargetVoxels();
-            RegenSelectionBoxes();
-            MarkDirty();
-        }
-    }
 
     // Helper to convert Recipe Booleans to Target Bytes
     private void GenerateTargetVoxels()
     {
-        Api?.Logger?.Debug($"Generating Target Voxels for Recipe {SelectedRecipeCode}");
+        if (Api?.Side != EnumAppSide.Client) return;
 
-        if (SelectedRecipe == null || SelectedRecipe.Voxels == null)
+        var recipe = SelectedRecipe;
+
+        Api?.Logger?.Debug($"Generating Target Voxels for Recipe {SelectedRecipeId}");
+
+        if (recipe == null || recipe.Voxels == null)
         {
-            Api?.Logger?.Error($"SelectedRecipe is null or Voxels is null for Recipe {SelectedRecipeCode}");
+            Api?.Logger?.Error($"SelectedRecipe is null or Voxels is null for Recipe {recipe.RecipeId}");
             TargetVoxels = null;
             return;
         }
@@ -196,41 +200,27 @@ public class BEChoppingBlock : BlockEntity
 
     public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
     {
-        if (WorkItemStack == null && byPlayer.Entity.Controls.ShiftKey) return TryPutLog(byPlayer);
-        if (WorkItemStack != null && byPlayer.Entity.Controls.ShiftKey) return TryTakeLog(byPlayer);
+        if (workItemStack == null && byPlayer.Entity.Controls.ShiftKey) return TryPutLog(byPlayer);
+        if (workItemStack != null && byPlayer.Entity.Controls.ShiftKey) return TryTakeLog(byPlayer);
 
         if (WorkItemStack != null && SelectedRecipe == null)
         {
-            OpenRecipeDialog(byPlayer);
+            OpenRecipeDialog();
             return true;
         }
 
         return false;
     }
 
-    private void OpenRecipeDialog(IPlayer player)
+    private void OpenRecipeDialog()
     {
         var capi = Api as ICoreClientAPI;
         Api.Logger.Debug($"Trying to open RecipeDialog");
 
-        if (capi == null || WorkItemStack == null) return;
+        if (capi == null || WorkSlot.Empty) return;
 
-        var matching = new List<HewingRecipe>();
-        var stacks = new List<ItemStack>();
-
-        foreach (var recipe in TreeSplittingModSystem.Recipes)
-        {
-            if (recipe.Matches(Api.World, WorkItemStack))
-            {
-                ItemStack outStack = recipe.GenerateOutput(WorkItemStack, Api.World);
-
-                if (outStack != null)
-                {
-                    matching.Add(recipe);
-                    stacks.Add(outStack);
-                }
-            }
-        }
+        var matching = WorkItemStack.GetMatchingHewingRecipes(Api.World);
+        var stacks = matching.Select(r => r.Output.ResolvedItemstack).Where(s => s != null).ToArray();
 
         capi.Logger.Debug($"Found {matching.Count} matching recipes");
 
@@ -238,19 +228,22 @@ public class BEChoppingBlock : BlockEntity
 
         if (dialog?.IsOpened() == true) dialog.TryClose();
 
-        dialog = new GuiDialogRecipeSelector(capi, stacks,
+        dialog = new(null, stacks,
             (selectedIndex) =>
             {
-                if (selectedIndex >= 0 && selectedIndex < matching.Count)
-                {
                     var recipe = matching[selectedIndex];
-                    capi.Network.GetChannel("treesplitting").SendPacket(new RecipeSelectPacket()
-                    {
-                        Pos = Pos,
-                        RecipeCode = recipe.Code.ToString()
-                    });
-                }
-            }
+
+                    byte[] data = SerializerUtil.Serialize(recipe.RecipeId);
+
+                    capi.Network.SendBlockEntityPacket(Pos, (int)EnumHewingPacket.SelectRecipe, data);
+                
+            },
+            () =>
+            {
+                capi.Network.SendBlockEntityPacket(Pos, (int)EnumHewingPacket.CancelSelect);
+            },
+            Pos,
+            Api as ICoreClientAPI
         );
         dialog.TryOpen();
     }
@@ -259,7 +252,7 @@ public class BEChoppingBlock : BlockEntity
     public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, int toolMode
     )
     {
-        if (WorkItemStack == null) return;
+        if (workItemStack == null) return;
 
         ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
 
@@ -320,12 +313,14 @@ public class BEChoppingBlock : BlockEntity
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player is primarily East/West, so cut a slice along the Z-axis.
-            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16),
+                new Vec3i(1, 1, 1));
         }
         else
         {
             // Player is primarily North/South, so cut a slice along the X-axis.
-            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1),
+                new Vec3i(1, 1, 1));
         }
     }
 
@@ -337,12 +332,14 @@ public class BEChoppingBlock : BlockEntity
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W, cut along X axis
-            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(0, voxelPos.Y, voxelPos.Z), new Vec3i(16, voxelPos.Y + 1, voxelPos.Z + 1),
+                new Vec3i(1, 1, 1));
         }
         else
         {
             // Player N/S, cut along Z axis
-            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16), new Vec3i(1, 1, 1));
+            RemoveVoxels(new Vec3i(voxelPos.X, voxelPos.Y, 0), new Vec3i(voxelPos.X + 1, voxelPos.Y + 1, 16),
+                new Vec3i(1, 1, 1));
         }
     }
 
@@ -354,39 +351,41 @@ public class BEChoppingBlock : BlockEntity
 
     private bool TryPutLog(IPlayer byPlayer)
     {
-        ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
-        if (heldStack == null) return false;
+        ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
+        if (slot.Empty) return false;
+        
+        ItemStack heldStack = slot.Itemstack;
+        
+        bool isWorkable = Api.GetHewingRecipes().Any(r => r.Matches(Api.World, heldStack));
 
-        // Do we have ANY matches?
-        if (!TreeSplittingModSystem.Recipes.Any(r => r.Matches(Api.World, heldStack))) return false;
+        if (!isWorkable) return false;
 
-        WorkItemStack = heldStack.Clone();
-        WorkItemStack.StackSize = 1;
-        byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
+        WorkSlot.Itemstack = slot.TakeOut(1);
+        WorkSlot.MarkDirty();
 
-        SelectedRecipe = null;
-        SelectedRecipeCode = null;
 
         GenerateLogVoxels();
-
         RegenSelectionBoxes();
         MarkDirty();
 
-        OpenRecipeDialog(byPlayer);
+        if (Api.Side == EnumAppSide.Server)
+        {
+            ((ICoreServerAPI)Api).Network.SendBlockEntityPacket(byPlayer as IServerPlayer, Pos, (int)EnumHewingPacket.OpenDialog);
+        }
+        
         return true;
     }
 
 
     private bool TryTakeLog(IPlayer byPlayer)
     {
-        if (WorkItemStack == null) return false;
-        ItemStack stackToReturn = WorkItemStack.Clone();
-        stackToReturn.StackSize = 1;
+        if (WorkSlot.Empty) return false;
+        
+        ItemStack stackToReturn = WorkSlot.TakeOut(1);
         if (!byPlayer.InventoryManager.TryGiveItemstack(stackToReturn))
             Api.World.SpawnItemEntity(stackToReturn, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
         ResetBlock();
 
-        // Close GUI if open
         if (Api.Side == EnumAppSide.Client) dialog?.TryClose();
 
         return true;
@@ -423,6 +422,52 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
+    public override void OnReceivedClientPacket(IPlayer fromPlayer, int packetid, byte[] data)
+    {
+
+        if (packetid == (int)EnumHewingPacket.SelectRecipe)
+        {
+            int recipeId = SerializerUtil.Deserialize<int>(data);
+            SelectedRecipeId = recipeId;
+            MarkDirty();
+            return;
+        }
+        
+        if (packetid == (int)EnumHewingPacket.CancelSelect)
+        {
+            if (SelectedRecipeId == -1 && !WorkSlot.Empty)
+            {
+                TryTakeLog(fromPlayer);
+            }
+
+            return;
+        }
+        
+        if (packetid == (int)EnumHewingPacket.OnUseOver)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                BinaryReader reader = new BinaryReader(ms);
+            
+                // Read in exact order of writing
+                int x = reader.ReadInt32();
+                int y = reader.ReadInt32();
+                int z = reader.ReadInt32();
+                byte faceIndex = reader.ReadByte();
+                int toolMode = reader.ReadInt32();
+
+                Vec3i voxelPos = new Vec3i(x, y, z);
+                BlockFacing face = BlockFacing.ALLFACES[faceIndex];
+
+                OnUseOver(fromPlayer, voxelPos, face, toolMode);
+                MarkDirty();
+            }
+            return;
+        }
+        
+        base.OnReceivedClientPacket(fromPlayer, packetid, data);
+    }
+
     private void HandleChopSideways(Vec3i pos)
     {
         RemoveVoxels(new Vec3i(0, pos.Y, 0), new Vec3i(16, pos.Y + 1, 16), new Vec3i(1, 1, 1));
@@ -433,7 +478,7 @@ public class BEChoppingBlock : BlockEntity
         double dx = player.Entity.Pos.X - (Pos.X + 0.5);
         double dz = player.Entity.Pos.Z - (Pos.Z + 0.5);
 
-        
+
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W, cut along X axis
@@ -497,9 +542,9 @@ public class BEChoppingBlock : BlockEntity
         if (finished)
         {
             // Success!
-            if (WorkItemStack != null)
+            if (workItemStack != null)
             {
-                ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
+                ItemStack result = SelectedRecipe.Output.ResolvedItemstack;
                 //if (!player.InventoryManager.TryGiveItemstack(result))
                 Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
 
@@ -512,9 +557,8 @@ public class BEChoppingBlock : BlockEntity
 
     private void ResetBlock()
     {
-        WorkItemStack = null;
-        SelectedRecipe = null;
-        SelectedRecipeCode = null;
+        workItemStack = null;
+        SelectedRecipeId = -1;
         Voxels = new byte[16, 16, 16];
         TargetVoxels = null;
         RegenSelectionBoxes();
@@ -611,6 +655,17 @@ public class BEChoppingBlock : BlockEntity
         CollisionBoxes = collisionBoxes.ToArray();
     }
 
+    public override void OnReceivedServerPacket(int packetid, byte[] data)
+    {
+        if (packetid == (int)EnumHewingPacket.OpenDialog)
+        {
+            OpenRecipeDialog();
+            return;
+        }
+        
+        base.OnReceivedServerPacket(packetid, data);
+    }
+
     public override void OnBlockRemoved()
     {
         base.OnBlockRemoved();
@@ -622,4 +677,12 @@ public class BEChoppingBlock : BlockEntity
         base.OnBlockUnloaded();
         renderer?.Dispose();
     }
+}
+
+public enum EnumHewingPacket
+{
+    OpenDialog = 1000,
+    SelectRecipe = 1001,
+    OnUseOver = 1002,
+    CancelSelect = 1003
 }

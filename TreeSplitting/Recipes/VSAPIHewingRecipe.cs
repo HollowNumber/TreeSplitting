@@ -1,8 +1,10 @@
+using System.Runtime.CompilerServices;
 using Vintagestory.API.Common;
 
 namespace TreeSplitting.Recipes;
 
 public class VSAPIHewingRecipe : LayeredVoxelRecipe<VSAPIHewingRecipe>, IByteSerializable
+
 {
     public override VSAPIHewingRecipe Clone()
     {
@@ -24,4 +26,13 @@ public class VSAPIHewingRecipe : LayeredVoxelRecipe<VSAPIHewingRecipe>, IByteSer
 
     public override int QuantityLayers => 16;
     public override string RecipeCategoryCode => "hewing";
+
+
+    public bool Matches(IWorldAccessor world, ItemStack inputStack)
+    {
+        if (inputStack is null) return false;
+
+
+        return Ingredient.SatisfiesAsIngredient(inputStack);
+    }
 }

@@ -11,8 +11,8 @@ using Vintagestory.API.Util;
 namespace TreeSplitting.Item;
 
 /// <summary>
-/// A log you've started hewing and taken off the chopping block, like the anvil's work items.
-/// Keeps the voxels, the recipe, which way it was lying and the original log, so putting it back carries on where you left off.
+/// A log that's been partly hewn and taken off the chopping block, like the anvil's work items.
+/// Keeps the voxels, the recipe, which way it was lying and the original log, so putting it back carries on where it was left.
 /// </summary>
 public class ItemHewnLog : Vintagestory.API.Common.Item
 {
@@ -80,7 +80,7 @@ public class ItemHewnLog : Vintagestory.API.Common.Item
 
         renderinfo.ModelRef = ObjectCacheUtil.GetOrCreate(capi, key, () =>
         {
-            // The log sits 10 voxels up on the chopping block, in your hand it starts at the bottom
+            // The log sits 10 voxels up on the chopping block, as an item it starts at the bottom
             MeshData mesh = LogMesher.GenMesh(capi, log, voxels, grainAxis, 0);
             return capi.Render.UploadMultiTextureMesh(mesh);
         });

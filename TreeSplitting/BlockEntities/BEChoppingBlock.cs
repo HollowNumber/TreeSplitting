@@ -60,7 +60,7 @@ public class BEChoppingBlock : BlockEntity
 
     // Which way the grain runs: up for a standing log, along X for a lying one, along Z once that's turned a quarter
     public int GrainAxis => !Horizontal ? 1 : Rotation % 2 == 0 ? 0 : 2;
-    // Once you've cut into it you can't tip it over anymore
+    // Once it's been cut into it can't be tipped over anymore
     public bool HasBeenCut;
     public AssetLocation? SelectedRecipeCode;
     public HewingRecipe? SelectedRecipe; // Runtime only
@@ -113,7 +113,7 @@ public class BEChoppingBlock : BlockEntity
             renderer = new WoodWorkItemRenderer(this, Pos, capi);
         }
 
-        // Server needs these too, otherwise you fall through the log
+        // Server needs these too, otherwise players fall through the log
         RegenSelectionBoxes();
 
         if (api.Side == EnumAppSide.Server) ConvertLegacyTopBlock();
@@ -301,7 +301,7 @@ public class BEChoppingBlock : BlockEntity
         return rotated;
     }
 
-    // Ctrl + right click tips the log onto its side or stands it back up, which recipes you get depends on how it sits
+    // Ctrl + right click tips the log onto its side or stands it back up, which recipes show up depends on how it sits
     private bool TryRotateLog(IPlayer byPlayer)
     {
         if (!CanRotate) return false;
@@ -434,7 +434,7 @@ public class BEChoppingBlock : BlockEntity
         MarkDirty();
     }
 
-    // Only wears the tool when you actually cut something
+    // Only wears the tool when something actually gets cut
     private void DamageTool(IPlayer byPlayer, EnumTool tool, float multiplier = 1f)
     {
         if (Api.Side != EnumAppSide.Server) return;
@@ -465,7 +465,7 @@ public class BEChoppingBlock : BlockEntity
         return count;
     }
 
-    // Chips fly off the side you hit, more wood cut means more chips. Runs on the server so everyone sees them
+    // Chips fly off the side that got hit, more wood cut means more chips. Runs on the server so everyone sees them
     private void SpawnWoodChips(ItemStack stack, Vec3i voxelPos, BlockFacing facing, int removed)
     {
         if (removed <= 0) return;
@@ -590,7 +590,7 @@ public class BEChoppingBlock : BlockEntity
     }
 
 
-    // Put a log you already started on back, exactly how you left it
+    // Put a partly hewn log back, exactly how it was left
     private bool TryPutHewnLog(IPlayer byPlayer, ItemStack hewnStack)
     {
         byte[,,]? voxels = ItemHewnLog.GetVoxels(hewnStack);
@@ -606,7 +606,7 @@ public class BEChoppingBlock : BlockEntity
 
         SelectedRecipeCode = ItemHewnLog.GetRecipeCode(hewnStack);
         SelectedRecipe = SelectedRecipeCode == null ? null : FindRecipe(Api, SelectedRecipeCode);
-        // Recipe got removed or doesn't fit anymore, you'll get to pick a new one
+        // Recipe got removed or doesn't fit anymore, so a new one gets picked
         if (SelectedRecipe != null && SelectedRecipe.Horizontal != Horizontal)
         {
             SelectedRecipe = null;
@@ -624,7 +624,7 @@ public class BEChoppingBlock : BlockEntity
     }
 
     /// <summary>
-    /// What you get back when the log comes off: the plain log if you haven't cut it yet, otherwise a partly hewn log that remembers everything.
+    /// What comes back when the log comes off: the plain log if it hasn't been cut yet, otherwise a partly hewn log that remembers everything.
     /// </summary>
     private ItemStack? TakeWorkPiece()
     {

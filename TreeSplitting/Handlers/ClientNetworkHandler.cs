@@ -46,7 +46,7 @@ public class ClientNetworkHandler
         SwingResult result = TrySwing();
         if (result == SwingResult.None) return;
 
-        // If you miss the log, don't let the game break the chopping block instead
+        // If the swing misses the log, don't let the game break the chopping block instead
         e.Handled = true;
 
         if (result == SwingResult.Swung)
@@ -85,7 +85,7 @@ public class ClientNetworkHandler
 
         if (_capi.ElapsedMilliseconds - _lastSwingMs < interval) return;
 
-        // Keep holding even if you look away for a moment, it just won't swing until you're back on the log
+        // Keep holding even when looking away for a moment, it just won't swing until the log is targeted again
         if (TrySwing() == SwingResult.Swung) _lastSwingMs = _capi.ElapsedMilliseconds;
     }
 

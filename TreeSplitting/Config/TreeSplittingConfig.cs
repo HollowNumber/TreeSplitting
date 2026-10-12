@@ -7,7 +7,7 @@ public class TreeSplittingConfig
 {
     public const string FileName = "treesplitting.json";
 
-    // Multiplies how much a finished recipe gives you, rounded, never less than 1
+    // Multiplies how much a finished recipe gives, rounded, never less than 1
     public float OutputMultiplier { get; set; } = 1f;
 
     // Multiplies the durability every hit costs, 0 turns tool wear off
@@ -19,7 +19,7 @@ public class TreeSplittingConfig
     public int KnifeDurabilityCost { get; set; } = 2;
     public int ChiselDurabilityCost { get; set; } = 1;
 
-    // If true, cutting away wood the recipe needs doesn't ruin the log, you just get the recipe once the rest is gone
+    // If true, cutting away wood the recipe needs doesn't ruin the log, the recipe just finishes once the rest is gone
     public bool ForgivingMode { get; set; } = false;
 
     // How long between swings when holding down attack, in milliseconds (client side)

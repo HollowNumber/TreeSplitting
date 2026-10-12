@@ -56,8 +56,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Orange box around every voxel you still need to cut, same as the anvil and clay forming.
-    /// Uses the game's colour presets so colour-blind mode works. Skips voxels buried in the log, you can't see them anyway.
+    /// Orange box around every voxel that still needs cutting, same as the anvil and clay forming.
+    /// Uses the game's colour presets so colour-blind mode works. Skips voxels buried in the log, they can't be seen anyway.
     /// </summary>
     private void RegenOutlineMesh(byte[,,] voxels, bool[,,]? targetVoxels, float yStart)
     {
@@ -123,7 +123,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     {
         if (overlayMeshRef == null || api.HideGuis) return;
 
-        // Only show it when holding a tool you can use on the log, like clay forming does with clay
+        // Only show it when holding a tool that works on the log, like clay forming does with clay
         EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
         if (tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
 

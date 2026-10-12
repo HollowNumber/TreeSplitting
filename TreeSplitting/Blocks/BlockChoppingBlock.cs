@@ -71,7 +71,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             ];
         }
 
-        // Tipping the log over works until you start cutting
+        // Tipping the log over works until the first cut
         if (be.CanRotate)
         {
             interactions = interactions.Append(new WorldInteraction
@@ -106,7 +106,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
         // Delegate to BE
         if (be.OnInteract(byPlayer, blockSel)) return true;
 
-        // Eat clicks on the top or the log so you can't place blocks on it
+        // Eat clicks on the top or the log so blocks can't be placed on it
         return blockSel.Face == BlockFacing.UP || blockSel.SelectionBoxIndex > 0;
     }
 
@@ -129,7 +129,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     }
 
 
-    // Only highlight the voxel you're looking at like the anvil, otherwise the black outline covers the orange one
+    // Only highlight the voxel being looked at like the anvil, otherwise the black outline covers the orange one
     public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
     {
         return true;
@@ -171,7 +171,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             be.OnInteract(byPlayer, blockSel);
         }
 
-        // Always eat the click so you can't place blocks on the log
+        // Always eat the click so blocks can't be placed on the log
         return true;
     }
 

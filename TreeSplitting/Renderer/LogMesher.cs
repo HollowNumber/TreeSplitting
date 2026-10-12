@@ -142,7 +142,7 @@ public static class LogMesher
     }
 
     /// <summary>
-    /// One quad, you give the uv (0-1 in the texture) for each corner yourself
+    /// One quad, with the uv (0-1 in the texture) given for each corner
     /// </summary>
     private static void AddFaceUv(MeshData mesh, TextureAtlasPosition tex, int color,
         float x0, float y0, float z0, float u0, float v0,

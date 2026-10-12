@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
@@ -6,8 +6,7 @@ using Vintagestory.API.Util;
 namespace TreeSplitting.Recipes;
 
 /// <summary>
-/// Byte-serializable so the server can sync recipes to clients through a recipe registry;
-/// the client never loads the "recipes" asset folder itself.
+/// Needs to be byte serializable so the server can send the recipes to clients, they don't load the recipes folder themselves.
 /// </summary>
 public abstract class GenericRecipe : IByteSerializable
 {
@@ -57,8 +56,8 @@ public abstract class GenericRecipe : IByteSerializable
     }
 
     /// <summary>
-    /// Resolves the recipe's item stacks. Must be called once blocks and items are registered (AssetsFinalize or later).
-    /// Wildcard and templated codes can't be resolved to a single stack, so they are matched/built at runtime instead.
+    /// Resolves the item stacks, blocks and items need to be loaded first (AssetsFinalize).
+    /// Skips wildcard/{wood} codes since those get worked out when you actually use the recipe.
     /// </summary>
     public virtual void Resolve(IWorldAccessor world)
     {
@@ -84,7 +83,7 @@ public abstract class GenericRecipe : IByteSerializable
             return WildcardUtil.Match(Ingredient.Code, inputStack.Collectible.Code);
         }
 
-        // Exact code. Compared directly so matching doesn't depend on Resolve() having run on this side.
+        // Just compare the code so it works on the client too, it never resolves
         return Ingredient.Code.Equals(inputStack.Collectible.Code);
     }
 

@@ -21,8 +21,7 @@ public class TreeSplittingModSystem : ModSystem
     //public static TreeSplittingConfig Config;
 
     /// <summary>
-    /// Hewing recipes for this side. The server loads them from assets; the game's recipe registry
-    /// syncs them to clients, since the "recipes" asset folder is only loaded on the server.
+    /// The server loads these, the recipe registry sends them to clients since they never load the recipes folder.
     /// </summary>
     public List<HewingRecipe> Recipes { get; private set; } = new();
 
@@ -65,7 +64,7 @@ public class TreeSplittingModSystem : ModSystem
 
     }
 
-    // Assets must not be read in Start(); AssetsLoaded is the earliest stage they are guaranteed to be available.
+    // Can't read assets in Start(), they might not be there yet
     public override void AssetsLoaded(ICoreAPI api)
     {
         base.AssetsLoaded(api);
@@ -73,7 +72,7 @@ public class TreeSplittingModSystem : ModSystem
         if (api.Side == EnumAppSide.Server) LoadRecipes(api);
     }
 
-    // Blocks and items are registered by now, so recipe ingredients/outputs can be resolved.
+    // Blocks and items are loaded by now so we can resolve the recipes
     public override void AssetsFinalize(ICoreAPI api)
     {
         base.AssetsFinalize(api);
@@ -98,7 +97,7 @@ public class TreeSplittingModSystem : ModSystem
     {
         var recipes = api.Assets.GetMany<HewingRecipe>(api.Logger, "recipes/hewing");
 
-        // Fill the registry's list in place; replacing it would stop the recipes from being synced.
+        // Don't replace the list, the registry needs the same one or nothing gets synced
         Recipes.Clear();
         Recipes.AddRange(recipes
             .Select(entry =>

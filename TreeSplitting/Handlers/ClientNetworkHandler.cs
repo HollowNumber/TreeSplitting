@@ -1,4 +1,4 @@
-using TreeSplitting.BlockEntities;
+﻿using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
 using TreeSplitting.Network;
 using Vintagestory.API.Client;
@@ -11,6 +11,7 @@ public class ClientNetworkHandler
 {
     private readonly ICoreClientAPI _capi;
     private readonly IClientNetworkChannel _channel;
+    private static readonly AssetLocation ChopSound = new("game:sounds/block/chop2");
 
 
     public ClientNetworkHandler(ICoreClientAPI capi)
@@ -39,25 +40,22 @@ public class ClientNetworkHandler
         ItemSlot activeSlot = _capi.World.Player.InventoryManager.ActiveHotbarSlot;
         ItemStack heldItemStack = activeSlot.Itemstack;
 
-        if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
+        EnumTool? tool = heldItemStack?.Collectible?.Tool;
+        if (heldItemStack is null || tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
 
-        
-        if (heldItemStack?.Item?.Tool is EnumTool.Chisel )
+        if (tool is EnumTool.Chisel)
         {
-            string offhand = _capi.World.Player.InventoryManager.OffhandHotbarSlot.Itemstack?.Item?.Code.ToString();
-
-            if (offhand is null || !offhand.Contains("hammer"))
+            if (_capi.World.Player.InventoryManager.OffhandHotbarSlot.Itemstack?.Collectible?.Tool is not EnumTool.Hammer)
             {
                 //The game does this automatically _capi.TriggerIngameError(new AssetLocation("treesplitting"), "chiselhammer", "You need to hold a hammer in your offhand to chisel wood voxels.");
-                return;     
+                return;
             }
-           
+
         }
-        
+
         BlockPos pos = be.Pos;
 
-        // While a log is being worked, a swing that misses the voxels must not fall through to vanilla
-        // block breaking, which would destroy the chopping block.
+        // If you miss the log, don't let the game break the chopping block instead
         if (be.WorkItemStack != null) e.Handled = true;
 
         Vec3i? voxel = be.GetSelectedVoxel(sel.SelectionBoxIndex);
@@ -70,8 +68,7 @@ public class ClientNetworkHandler
 
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 
-        _capi.Logger.Debug($"Calling Animation for {heldItemStack.Item.Code.Path} at {pos} with mode {mode}");
-        string anim = heldItemStack.Item.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+        string anim = heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
 
         // So we default to "axehit" if the item is silent.
         if (string.IsNullOrEmpty(anim)) anim = "axehit";
@@ -79,7 +76,7 @@ public class ClientNetworkHandler
         _capi.World.Player.Entity.StartAnimation(anim);
         _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
 
-        _capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), pos.X, pos.Y, pos.Z, _capi.World.Player);
+        _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
 
         _channel.SendPacket(new ToolActionPacket()
         {

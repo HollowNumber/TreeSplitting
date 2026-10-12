@@ -1,4 +1,4 @@
-using Vintagestory.API.Client;
+﻿using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
@@ -8,9 +8,8 @@ using TreeSplitting.BlockEntities;
 namespace TreeSplitting.Blocks;
 
 /// <summary>
-/// The chopping block is a 1x2x1 multiblock (see the "Multiblock" behavior in its json): the game places a
-/// vanilla proxy block above the stump and forwards everything aimed at it here through the IMultiBlock* interfaces,
-/// with <c>offset</c> pointing from the proxy back to the stump.
+/// 1x2x1 multiblock (the "Multiblock" behavior in the json). The game puts a vanilla block above the stump and
+/// sends everything aimed at it through the MB methods down here, offset points from that block back to the stump.
 /// </summary>
 public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInteract, IMultiBlockBlockProperties
 {
@@ -18,7 +17,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     {
         base.OnBlockRemoved(world, pos);
 
-        // Worlds from before the multiblock switch may still have the old top block above an unconverted stump
+        // Old worlds might still have our old top block up there
         BlockPos upPos = pos.UpCopy();
         if (world.BlockAccessor.GetBlock(upPos) is BlockChoppingBlockTop)
         {
@@ -34,8 +33,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
         // Delegate to BE
         if (be.OnInteract(byPlayer, blockSel)) return true;
 
-        // The space above the stump belongs to the work item. Consume clicks on the top surface or the log so the
-        // held block isn't placed there instead.
+        // Eat clicks on the top or the log so you can't place blocks on it
         return blockSel.Face == BlockFacing.UP || blockSel.SelectionBoxIndex > 0;
     }
 
@@ -58,8 +56,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     }
 
 
-    // Highlight only the hovered voxel (like the anvil); otherwise the block highlight draws black
-    // over every voxel box and hides the recipe outline
+    // Only highlight the voxel you're looking at like the anvil, otherwise the black outline covers the orange one
     public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
     {
         return true;
@@ -101,7 +98,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             be.OnInteract(byPlayer, blockSel);
         }
 
-        // Always consume the click so a held block isn't placed against the log
+        // Always eat the click so you can't place blocks on the log
         return true;
     }
 
@@ -136,7 +133,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
         return Sounds;
     }
 
-    // Nothing can hang off or rest on the empty space above the stump
+    // Nothing should attach to the space above the stump
     public bool MBCanAttachBlockAt(IBlockAccessor blockAccessor, Block block, BlockPos pos, BlockFacing blockFace, Cuboidi attachmentArea, Vec3i offsetInv)
     {
         return false;

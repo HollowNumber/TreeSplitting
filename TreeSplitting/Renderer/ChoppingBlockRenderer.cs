@@ -31,13 +31,12 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         this.pos = pos;
         this.be = be;
 
-        // Same setup as vanilla's anvil/clay forming: the work item in the opaque pass,
-        // the recipe outline after final composition so it draws on top cleanly.
+        // Same as the vanilla anvil, log in the opaque pass and the outline after everything else
         api.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "treesplitting-workitem");
         api.Event.RegisterRenderer(this, EnumRenderStage.AfterFinalComposition, "treesplitting-workitem");
     }
 
-    public void RegenMesh(ItemStack workItem, byte[,,] voxels, byte[,,] targetVoxels = null)
+    public void RegenMesh(ItemStack? workItem, byte[,,] voxels, bool[,,]? targetVoxels = null)
     {
         if (workItem == null)
         {
@@ -48,7 +47,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
             return;
         }
 
-        MeshData mesh = new MeshData(24, 36, false, true, true, true);
+        // Start big enough for a full log so it doesn't keep resizing
+        MeshData mesh = new MeshData(4096, 6144, false, true, true, true);
             
         float yStart = 10.0f; 
 
@@ -226,11 +226,10 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Builds the recipe outline the way vanilla's anvil and clay forming do: a wireframe cube around every voxel
-    /// that still has to be removed, coloured with the game's colour presets (so colour-blind mode applies).
-    /// Voxels buried inside the log are skipped since their outline would be hidden anyway.
+    /// Orange box around every voxel you still need to cut, same as the anvil and clay forming.
+    /// Uses the game's colour presets so colour-blind mode works. Skips voxels buried in the log, you can't see them anyway.
     /// </summary>
-    private void RegenOutlineMesh(byte[,,] voxels, byte[,,]? targetVoxels, float yStart)
+    private void RegenOutlineMesh(byte[,,] voxels, bool[,,]? targetVoxels, float yStart)
     {
         overlayMeshRef?.Dispose();
         overlayMeshRef = null;
@@ -242,7 +241,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         int removeCol = api.ColorPreset.GetColor("voxelColorOrange");
         MeshData cubeMesh = LineMeshUtil.GetCube(removeCol);
-        // GetCube spans -1..1; shrink it to one voxel (0..1/16)
+        // GetCube is -1 to 1, shrink it down to one voxel
         for (int i = 0; i < cubeMesh.xyz.Length; i++)
         {
             cubeMesh.xyz[i] = cubeMesh.xyz[i] / 32f + 1 / 32f;
@@ -256,7 +255,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                 for (int z = 0; z < 16; z++)
                 {
                     bool hasWood = voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
-                    bool keepWood = targetVoxels[x, y, z] != 0;
+                    bool keepWood = targetVoxels[x, y, z];
                     if (!hasWood || keepWood) continue;
 
                     bool exposed =
@@ -294,7 +293,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     {
         if (overlayMeshRef == null || api.HideGuis) return;
 
-        // Only show the outline while holding a tool that works the log, like vanilla clay forming does with clay
+        // Only show it when holding a tool you can use on the log, like clay forming does with clay
         EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
         if (tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
 
@@ -303,7 +302,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         Vec3d camPos = api.World.Player.Entity.CameraPos;
 
         ModelMat.Set(rpi.CameraMatrixOriginf).Translate(pos.X - camPos.X, pos.Y - camPos.Y, pos.Z - camPos.Z);
-        // Fade out between 5 and 10 blocks away
+        // Fades out between 5 and 10 blocks away
         outlineColorMul.A = 1 - GameMath.Clamp((float)Math.Sqrt(plrPos.SquareDistanceTo(pos.X, pos.Y, pos.Z)) / 5 - 1f, 0, 1);
 
         float linewidth = api.Settings.Float["wireframethickness"];
@@ -324,7 +323,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         if (linewidth != 1.6f) rpi.LineWidth = 1.6f;
 
         if (RuntimeEnv.OS != OS.Mac) return;
-        // Vanilla does the same: on Mac the depth test and blending have to be reset afterwards
+        // Mac needs these reset after, vanilla does the same
         rpi.GLDisableDepthTest();
         rpi.GlToggleBlend(false);
     }

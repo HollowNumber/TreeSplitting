@@ -1,12 +1,11 @@
-using Vintagestory.API.Common;
+﻿using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using TreeSplitting.BlockEntities;
 
 namespace TreeSplitting.Blocks;
 
 /// <summary>
-/// Invisible block reserving the space above the chopping block for the work item.
-/// It only reports the part of the work item inside its own cell; the stump reports the rest.
+/// Old invisible block above the stump. Not placed anymore, only kept so old worlds load, it gets swapped for the vanilla multiblock one.
 /// </summary>
 public class BlockChoppingBlockTop : Block
 {
@@ -29,14 +28,13 @@ public class BlockChoppingBlockTop : Block
         return base.GetCollisionBoxes(blockAccessor, pos);
     }
 
-    // Highlight only the hovered voxel (like the anvil); otherwise the block highlight draws black
-    // over every voxel box and hides the recipe outline
+    // Only highlight the voxel you're looking at like the anvil, otherwise the black outline covers the orange one
     public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
     {
         return true;
     }
 
-    // Nothing can hang off or rest on the empty space above the stump
+    // Nothing should attach to the space above the stump
     public override bool CanAttachBlockAt(IBlockAccessor blockAccessor, Block block, BlockPos pos, BlockFacing blockFace, Cuboidi? attachmentArea = null)
     {
         return false;
@@ -63,7 +61,7 @@ public class BlockChoppingBlockTop : Block
         {
             be.OnInteract(byPlayer, blockSel);
 
-            // Always consume the click so a held block isn't placed against the log
+            // Always eat the click so you can't place blocks on the log
             return true;
         }
         return base.OnBlockInteractStart(world, byPlayer, blockSel);

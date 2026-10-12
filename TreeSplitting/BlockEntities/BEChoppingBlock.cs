@@ -31,8 +31,14 @@ public class BEChoppingBlock : BlockEntity
     public HewingRecipe? SelectedRecipe; // Runtime only
 
     // Visuals
+    // Boxes for the stump's cell (index 0 is the stump itself) and for the top block's cell, in that block's local space
     public Cuboidf[] SelectionBoxes = [];
+    public Cuboidf[] TopSelectionBoxes = [];
     public Cuboidf[] CollisionBoxes = [];
+    public Cuboidf[] TopCollisionBoxes = [];
+    // The voxel each selection box covers, parallel to SelectionBoxes / TopSelectionBoxes
+    private Vec3i?[] SelectionVoxels = [];
+    private Vec3i?[] TopSelectionVoxels = [];
     WoodWorkItemRenderer renderer;
     GuiDialogRecipeSelector dialog;
 
@@ -52,14 +58,13 @@ public class BEChoppingBlock : BlockEntity
             }
         }
 
-        if (api.Side == EnumAppSide.Client)
+        if (api is ICoreClientAPI capi)
         {
-            renderer = new WoodWorkItemRenderer(this, Pos, api as ICoreClientAPI);
-
-            (api as ICoreClientAPI)?.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque);
-
-            RegenSelectionBoxes();
+            renderer = new WoodWorkItemRenderer(this, Pos, capi);
         }
+
+        // Both sides need the boxes: the server uses the collision boxes for physics.
+        RegenSelectionBoxes();
     }
 
 
@@ -551,12 +556,20 @@ public class BEChoppingBlock : BlockEntity
             renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels);
         }
 
+        // The work item spans two block cells: voxel layers 0-5 sit in the stump's cell, 6-15 in the top block's cell.
+        // Each block only reports the boxes inside its own cell (top boxes in the top block's local space), so a
+        // selection always belongs to the block that's actually there and placement/face logic behaves.
         List<Cuboidf> selectionBoxes = new List<Cuboidf>();
+        List<Vec3i?> selectionVoxels = new List<Vec3i?>();
+        List<Cuboidf> topSelectionBoxes = new List<Cuboidf>();
+        List<Vec3i?> topSelectionVoxels = new List<Vec3i?>();
         List<Cuboidf> collisionBoxes = new List<Cuboidf>();
+        List<Cuboidf> topCollisionBoxes = new List<Cuboidf>();
 
         // Always add the stump as base collision/selection
         Cuboidf stumpBox = new Cuboidf(0, 0, 0, 1, 10f / 16f, 1);
         selectionBoxes.Add(stumpBox);
+        selectionVoxels.Add(null);
         collisionBoxes.Add(stumpBox);
 
         float yStart = 10.0f;
@@ -599,14 +612,20 @@ public class BEChoppingBlock : BlockEntity
                         if (hasExposedFace)
                         {
                             float py = y + yStart;
-                            selectionBoxes.Add(new Cuboidf(
+                            bool inTopCell = py >= 16;
+                            if (inTopCell) py -= 16;
+
+                            var box = new Cuboidf(
                                 x / 16f,
                                 py / 16f,
                                 z / 16f,
                                 (x + 1) / 16f,
                                 (py + 1) / 16f,
                                 (z + 1) / 16f
-                            ));
+                            );
+
+                            (inTopCell ? topSelectionBoxes : selectionBoxes).Add(box);
+                            (inTopCell ? topSelectionVoxels : selectionVoxels).Add(new Vec3i(x, y, z));
                         }
                     }
                 }
@@ -617,20 +636,38 @@ public class BEChoppingBlock : BlockEntity
         // This is much more efficient than individual voxel collision boxes
         if (hasAnyVoxels)
         {
-            float pyMin = minY + yStart;
-            float pyMax = maxY + 1 + yStart;
-            collisionBoxes.Add(new Cuboidf(
-                minX / 16f,
-                pyMin / 16f,
-                minZ / 16f,
-                (maxX + 1) / 16f,
-                pyMax / 16f,
-                (maxZ + 1) / 16f
-            ));
+            float pyMin = (minY + yStart) / 16f;
+            float pyMax = (maxY + 1 + yStart) / 16f;
+
+            // Split the bounding box at the cell boundary, same as the selection boxes
+            if (pyMin < 1)
+            {
+                collisionBoxes.Add(new Cuboidf(minX / 16f, pyMin, minZ / 16f, (maxX + 1) / 16f, Math.Min(pyMax, 1), (maxZ + 1) / 16f));
+            }
+
+            if (pyMax > 1)
+            {
+                topCollisionBoxes.Add(new Cuboidf(minX / 16f, Math.Max(pyMin, 1) - 1, minZ / 16f, (maxX + 1) / 16f, pyMax - 1, (maxZ + 1) / 16f));
+            }
         }
 
         SelectionBoxes = selectionBoxes.ToArray();
+        SelectionVoxels = selectionVoxels.ToArray();
+        TopSelectionBoxes = topSelectionBoxes.ToArray();
+        TopSelectionVoxels = topSelectionVoxels.ToArray();
         CollisionBoxes = collisionBoxes.ToArray();
+        TopCollisionBoxes = topCollisionBoxes.ToArray();
+    }
+
+    /// <summary>
+    /// Maps a selection box index on the stump (<paramref name="onTopBlock"/> false) or top block to the voxel it covers.
+    /// Returns null for the stump itself or an out of range index.
+    /// </summary>
+    public Vec3i? GetSelectedVoxel(bool onTopBlock, int selectionBoxIndex)
+    {
+        Vec3i?[] voxels = onTopBlock ? TopSelectionVoxels : SelectionVoxels;
+        if (selectionBoxIndex < 0 || selectionBoxIndex >= voxels.Length) return null;
+        return voxels[selectionBoxIndex];
     }
 
     public override void OnBlockRemoved()

@@ -68,16 +68,13 @@ public class ClientNetworkHandler
         // block breaking, which would destroy the chopping block.
         if (be.WorkItemStack != null) e.Handled = true;
 
-        if (sel.SelectionBoxIndex <= 0 || sel.SelectionBoxIndex >= be.SelectionBoxes.Length) return;
+        Vec3i? voxel = be.GetSelectedVoxel(block is BlockChoppingBlockTop, sel.SelectionBoxIndex);
+        if (voxel is null) return;
         e.Handled = true;
 
-        // Calculate voxel coord
-
-        Cuboidf box = be.SelectionBoxes[sel.SelectionBoxIndex];
-
-        int x = (int)(box.X1 * 16);
-        int y = (int)((box.Y1 * 16) - 10);
-        int z = (int)(box.Z1 * 16);
+        int x = voxel.X;
+        int y = voxel.Y;
+        int z = voxel.Z;
 
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 

@@ -2,6 +2,8 @@
 using TreeSplitting.BlockEntities;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
@@ -12,10 +14,12 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private ICoreClientAPI api;
     private BlockPos pos;
     private BEChoppingBlock be;
-    private MeshRef meshRef;
-    private MeshRef overlayMeshRef; 
+    private MeshRef? meshRef;
+    private MeshRef? overlayMeshRef;
     private Matrixf ModelMat = new Matrixf();
-        
+    private Vec4f outlineColorMul = new Vec4f(1, 1, 1, 1);
+    private readonly Vec3f origin = new Vec3f(0, 0, 0);
+
     private static readonly int WhiteColor = ColorUtil.ToRgba(255, 255, 255, 255);
 
     public double RenderOrder => 0.5;
@@ -26,6 +30,11 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         this.api = api;
         this.pos = pos;
         this.be = be;
+
+        // Same setup as vanilla's anvil/clay forming: the work item in the opaque pass,
+        // the recipe outline after final composition so it draws on top cleanly.
+        api.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "treesplitting-workitem");
+        api.Event.RegisterRenderer(this, EnumRenderStage.AfterFinalComposition, "treesplitting-workitem");
     }
 
     public void RegenMesh(ItemStack workItem, byte[,,] voxels, byte[,,] targetVoxels = null)
@@ -41,7 +50,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         MeshData mesh = new MeshData(24, 36, false, true, true, true);
             
-        float pixelSize = 1f / 16f; 
         float yStart = 10.0f; 
 
         CollectibleObject collectible = workItem.Item ?? (CollectibleObject)workItem.Block;
@@ -214,47 +222,110 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         meshRef = api.Render.UploadMesh(mesh);
 
 
-        if (overlayMeshRef != null) { overlayMeshRef.Dispose(); overlayMeshRef = null; }
-            
-        if (targetVoxels != null)
-        {
-            MeshData overlayMesh = new MeshData(24, 36);
-            overlayMesh.SetMode(EnumDrawMode.Lines);
-                
-            // Standard Green Color
-            int greenCol = ColorUtil.ToRgba(255, 0,255, 0);
+        RegenOutlineMesh(voxels, targetVoxels, yStart);
+    }
 
-            for (int x = 0; x < 16; x++)
+    /// <summary>
+    /// Builds the recipe outline the way vanilla's anvil and clay forming do: a wireframe cube around every voxel
+    /// that still has to be removed, coloured with the game's colour presets (so colour-blind mode applies).
+    /// Voxels buried inside the log are skipped since their outline would be hidden anyway.
+    /// </summary>
+    private void RegenOutlineMesh(byte[,,] voxels, byte[,,]? targetVoxels, float yStart)
+    {
+        overlayMeshRef?.Dispose();
+        overlayMeshRef = null;
+
+        if (targetVoxels == null) return;
+
+        MeshData outlineMesh = new MeshData(24, 36, false, false, true, false);
+        outlineMesh.SetMode(EnumDrawMode.Lines);
+
+        int removeCol = api.ColorPreset.GetColor("voxelColorOrange");
+        MeshData cubeMesh = LineMeshUtil.GetCube(removeCol);
+        // GetCube spans -1..1; shrink it to one voxel (0..1/16)
+        for (int i = 0; i < cubeMesh.xyz.Length; i++)
+        {
+            cubeMesh.xyz[i] = cubeMesh.xyz[i] / 32f + 1 / 32f;
+        }
+        MeshData voxelMeshOffset = cubeMesh.Clone();
+
+        for (int x = 0; x < 16; x++)
+        {
+            for (int y = 0; y < 16; y++)
             {
-                for (int y = 0; y < 16; y++)
+                for (int z = 0; z < 16; z++)
                 {
-                    for (int z = 0; z < 16; z++)
+                    bool hasWood = voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
+                    bool keepWood = targetVoxels[x, y, z] != 0;
+                    if (!hasWood || keepWood) continue;
+
+                    bool exposed =
+                        y == 15 || voxels[x, y + 1, z] == 0 ||
+                        y == 0 || voxels[x, y - 1, z] == 0 ||
+                        x == 0 || voxels[x - 1, y, z] == 0 ||
+                        x == 15 || voxels[x + 1, y, z] == 0 ||
+                        z == 0 || voxels[x, y, z - 1] == 0 ||
+                        z == 15 || voxels[x, y, z + 1] == 0;
+                    if (!exposed) continue;
+
+                    float px = x / 16f;
+                    float py = (y + yStart) / 16f;
+                    float pz = z / 16f;
+
+                    for (int i = 0; i < cubeMesh.xyz.Length; i += 3)
                     {
-                        // Show highlight if it's a Target Voxel AND it currently exists
-                        if (targetVoxels[x, y, z] != 0 && voxels[x, y, z] != 0)
-                        {
-                            float py = y + yStart;
-                            float xMin = x / 16f;
-                            float yMin = py / 16f;
-                            float zMin = z / 16f;
-                                
-                            float expand = 0.02f; 
-                                
-                            // Inline box generation for performance (avoiding GetCube allocations)
-                            AddWireframeBox(overlayMesh, 
-                                xMin, yMin, zMin,
-                                xMin + pixelSize, yMin + pixelSize, zMin + pixelSize,
-                                greenCol);
-                        }
+                        voxelMeshOffset.xyz[i] = px + cubeMesh.xyz[i];
+                        voxelMeshOffset.xyz[i + 1] = py + cubeMesh.xyz[i + 1];
+                        voxelMeshOffset.xyz[i + 2] = pz + cubeMesh.xyz[i + 2];
                     }
+
+                    outlineMesh.AddMeshData(voxelMeshOffset);
                 }
             }
-
-            if (overlayMesh.VerticesCount > 0)
-            {
-                overlayMeshRef = api.Render.UploadMesh(overlayMesh);
-            }
         }
+
+        if (outlineMesh.VerticesCount > 0)
+        {
+            overlayMeshRef = api.Render.UploadMesh(outlineMesh);
+        }
+    }
+
+    private void RenderRecipeOutline()
+    {
+        if (overlayMeshRef == null || api.HideGuis) return;
+
+        // Only show the outline while holding a tool that works the log, like vanilla clay forming does with clay
+        EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
+        if (tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
+
+        IRenderAPI rpi = api.Render;
+        EntityPos plrPos = api.World.Player!.Entity.Pos;
+        Vec3d camPos = api.World.Player.Entity.CameraPos;
+
+        ModelMat.Set(rpi.CameraMatrixOriginf).Translate(pos.X - camPos.X, pos.Y - camPos.Y, pos.Z - camPos.Z);
+        // Fade out between 5 and 10 blocks away
+        outlineColorMul.A = 1 - GameMath.Clamp((float)Math.Sqrt(plrPos.SquareDistanceTo(pos.X, pos.Y, pos.Z)) / 5 - 1f, 0, 1);
+
+        float linewidth = api.Settings.Float["wireframethickness"];
+        rpi.LineWidth = linewidth;
+        rpi.GLEnableDepthTest();
+        rpi.GlToggleBlend(true);
+
+        IShaderProgram prog = rpi.GetEngineShader(EnumShaderProgram.Wireframe);
+        prog.Use();
+        prog.Uniform("origin", origin);
+        prog.UniformMatrix("projectionMatrix", rpi.CurrentProjectionMatrix);
+        prog.UniformMatrix("modelViewMatrix", ModelMat.Values);
+        prog.Uniform("colorIn", outlineColorMul);
+        rpi.RenderMesh(overlayMeshRef);
+        prog.Stop();
+
+        if (linewidth != 1.6f) rpi.LineWidth = 1.6f;
+
+        if (RuntimeEnv.OS != OS.Mac) return;
+        // Vanilla does the same: on Mac the depth test and blending have to be reset afterwards
+        rpi.GLDisableDepthTest();
+        rpi.GlToggleBlend(false);
     }
 
     /// <summary>
@@ -319,40 +390,16 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         mesh.AddIndex(baseIndex + 3);
     }
 
-    private void AddWireframeBox(MeshData mesh, float x1, float y1, float z1, float x2, float y2, float z2, int color)
-    {
-        int i = mesh.VerticesCount;
-            
-        // Use the explicit overload for x,y,z,u,v,color
-        mesh.AddVertex(x1, y1, z1, 0, 0, color); 
-        mesh.AddVertex(x2, y1, z1, 0, 0, color); 
-        mesh.AddVertex(x2, y1, z2, 0, 0, color); 
-        mesh.AddVertex(x1, y1, z2, 0, 0, color); 
-        mesh.AddVertex(x1, y2, z1, 0, 0, color); 
-        mesh.AddVertex(x2, y2, z1, 0, 0, color); 
-        mesh.AddVertex(x2, y2, z2, 0, 0, color); 
-        mesh.AddVertex(x1, y2, z2, 0, 0, color); 
-
-        // Indices
-        mesh.AddIndex(i+0); mesh.AddIndex(i+1);
-        mesh.AddIndex(i+1); mesh.AddIndex(i+2);
-        mesh.AddIndex(i+2); mesh.AddIndex(i+3);
-        mesh.AddIndex(i+3); mesh.AddIndex(i+0);
-
-        mesh.AddIndex(i+4); mesh.AddIndex(i+5);
-        mesh.AddIndex(i+5); mesh.AddIndex(i+6);
-        mesh.AddIndex(i+6); mesh.AddIndex(i+7);
-        mesh.AddIndex(i+7); mesh.AddIndex(i+4);
-
-        mesh.AddIndex(i+0); mesh.AddIndex(i+4);
-        mesh.AddIndex(i+1); mesh.AddIndex(i+5);
-        mesh.AddIndex(i+2); mesh.AddIndex(i+6);
-        mesh.AddIndex(i+3); mesh.AddIndex(i+7);
-    }
-
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
         if (meshRef == null) return;
+
+        if (stage == EnumRenderStage.AfterFinalComposition)
+        {
+            RenderRecipeOutline();
+            return;
+        }
+
         IRenderAPI rpi = api.Render;
         Vec3d camPos = api.World.Player.Entity.CameraPos;
         rpi.GlDisableCullFace();
@@ -361,15 +408,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         prog.ViewMatrix = rpi.CameraMatrixOriginf;
         prog.ProjectionMatrix = rpi.CurrentProjectionMatrix;
         prog.Tex2D = api.BlockTextureAtlas.Positions[0].atlasTextureId;
-            
+
         rpi.RenderMesh(meshRef);
-            
-        if (overlayMeshRef != null)
-        {
-            prog.ExtraGlow = 255;
-            rpi.RenderMesh(overlayMeshRef);
-            prog.ExtraGlow = 0;
-        }
 
         prog.Stop();
     }
@@ -377,6 +417,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     public void Dispose() 
     { 
         api.Event.UnregisterRenderer(this, EnumRenderStage.Opaque); 
+        api.Event.UnregisterRenderer(this, EnumRenderStage.AfterFinalComposition); 
         meshRef?.Dispose(); 
         overlayMeshRef?.Dispose(); 
     }

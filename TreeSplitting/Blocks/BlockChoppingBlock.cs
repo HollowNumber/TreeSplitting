@@ -57,7 +57,11 @@ public class BlockChoppingBlock : Block
         if (be == null) return base.OnBlockInteractStart(world, byPlayer, blockSel);
 
         // Delegate to BE
-        return be.OnInteract(byPlayer, blockSel);
+        if (be.OnInteract(byPlayer, blockSel)) return true;
+
+        // The space above the stump belongs to the work item. Consume clicks on the top surface or the log so the
+        // held block isn't placed there instead.
+        return blockSel.Face == BlockFacing.UP || blockSel.SelectionBoxIndex > 0;
     }
 
 
@@ -70,14 +74,7 @@ public class BlockChoppingBlock : Block
             Cuboidf[] combinedBoxes = (Cuboidf[])be.SelectionBoxes.Clone();
             Cuboidf[] stumpBoxes = base.GetSelectionBoxes(blockAccessor, pos);
 
-            if (stumpBoxes.Length > 0)
-            {
-                combinedBoxes[0] = stumpBoxes[0];
-            }
-            else
-            {
-                combinedBoxes[0] = Cuboidf.Default();
-            }
+            combinedBoxes[0] = stumpBoxes.Length > 0 ? stumpBoxes[0] : Cuboidf.Default();
 
             return combinedBoxes;
         }

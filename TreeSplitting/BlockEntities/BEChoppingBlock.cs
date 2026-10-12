@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TreeSplitting.Blocks;
 using TreeSplitting.Gui;
+using TreeSplitting.Item;
 using TreeSplitting.Logic;
 using TreeSplitting.Network;
 using TreeSplitting.Recipes;
@@ -564,6 +565,8 @@ public class BEChoppingBlock : BlockEntity
         ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
         if (heldStack == null) return false;
 
+        if (heldStack.Collectible is ItemHewnLog) return TryPutHewnLog(byPlayer, heldStack);
+
         // Do we have ANY matches?
         if (!TreeSplittingModSystem.GetRecipes(Api).Any(r => r.Matches(Api.World, heldStack))) return false;
 
@@ -587,13 +590,57 @@ public class BEChoppingBlock : BlockEntity
     }
 
 
+    // Put a log you already started on back, exactly how you left it
+    private bool TryPutHewnLog(IPlayer byPlayer, ItemStack hewnStack)
+    {
+        byte[,,]? voxels = ItemHewnLog.GetVoxels(hewnStack);
+        ItemStack? log = ItemHewnLog.GetLog(hewnStack, Api.World);
+        if (voxels == null || log?.Collectible == null) return false;
+
+        WorkItemStack = log;
+        WorkItemStack.StackSize = 1;
+        Voxels = voxels;
+        Horizontal = ItemHewnLog.IsHorizontal(hewnStack);
+        Rotation = ItemHewnLog.GetRotation(hewnStack);
+        HasBeenCut = true;
+
+        SelectedRecipeCode = ItemHewnLog.GetRecipeCode(hewnStack);
+        SelectedRecipe = SelectedRecipeCode == null ? null : FindRecipe(Api, SelectedRecipeCode);
+        // Recipe got removed or doesn't fit anymore, you'll get to pick a new one
+        if (SelectedRecipe != null && SelectedRecipe.Horizontal != Horizontal)
+        {
+            SelectedRecipe = null;
+            SelectedRecipeCode = null;
+        }
+
+        byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
+        byPlayer.InventoryManager.ActiveHotbarSlot.MarkDirty();
+
+        RegenSelectionBoxes();
+        MarkDirty();
+
+        if (SelectedRecipe == null) OpenRecipeDialog(byPlayer);
+        return true;
+    }
+
+    /// <summary>
+    /// What you get back when the log comes off: the plain log if you haven't cut it yet, otherwise a partly hewn log that remembers everything.
+    /// </summary>
+    private ItemStack? TakeWorkPiece()
+    {
+        if (WorkItemStack == null) return null;
+
+        if (HasBeenCut) return ItemHewnLog.Create(Api.World, WorkItemStack, Voxels, Horizontal, Rotation, SelectedRecipeCode);
+
+        ItemStack log = WorkItemStack.Clone();
+        log.StackSize = 1;
+        return log;
+    }
+
     private bool TryTakeLog(IPlayer byPlayer)
     {
-        if (WorkItemStack == null) return false;
-
-        // A cut log isn't a log anymore, so it comes back as firewood for what's left of it
-        ItemStack stackToReturn = HasBeenCut ? LeftoverFirewood() : WorkItemStack.Clone();
-        stackToReturn.StackSize = HasBeenCut ? stackToReturn.StackSize : 1;
+        ItemStack? stackToReturn = TakeWorkPiece();
+        if (stackToReturn == null) return false;
         if (!byPlayer.InventoryManager.TryGiveItemstack(stackToReturn))
             Api.World.SpawnItemEntity(stackToReturn, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
         ResetBlock();
@@ -833,10 +880,10 @@ public class BEChoppingBlock : BlockEntity
     {
         base.OnBlockBroken(byPlayer);
 
-        // Drop the log instead of just deleting it
-        if (Api.Side == EnumAppSide.Server && WorkItemStack != null)
+        // Drop the log (or what's left of it) instead of just deleting it
+        if (Api.Side == EnumAppSide.Server && TakeWorkPiece() is { } piece)
         {
-            Api.World.SpawnItemEntity(WorkItemStack.Clone(), Pos.ToVec3d().Add(0.5, 0.5, 0.5));
+            Api.World.SpawnItemEntity(piece, Pos.ToVec3d().Add(0.5, 0.5, 0.5));
             WorkItemStack = null;
         }
     }

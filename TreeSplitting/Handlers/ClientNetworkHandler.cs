@@ -68,7 +68,7 @@ public class ClientNetworkHandler
         // block breaking, which would destroy the chopping block.
         if (be.WorkItemStack != null) e.Handled = true;
 
-        Vec3i? voxel = be.GetSelectedVoxel(block is BlockChoppingBlockTop, sel.SelectionBoxIndex);
+        Vec3i? voxel = be.GetSelectedVoxel(sel.SelectionBoxIndex);
         if (voxel is null) return;
         e.Handled = true;
 

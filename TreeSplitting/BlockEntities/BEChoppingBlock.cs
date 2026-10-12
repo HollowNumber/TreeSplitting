@@ -38,7 +38,6 @@ public class BEChoppingBlock : BlockEntity
     public Cuboidf[] TopCollisionBoxes = [];
     // The voxel each selection box covers, parallel to SelectionBoxes / TopSelectionBoxes
     private Vec3i?[] SelectionVoxels = [];
-    private Vec3i?[] TopSelectionVoxels = [];
     WoodWorkItemRenderer renderer;
     GuiDialogRecipeSelector dialog;
 
@@ -556,13 +555,12 @@ public class BEChoppingBlock : BlockEntity
             renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels);
         }
 
-        // The work item spans two block cells: voxel layers 0-5 sit in the stump's cell, 6-15 in the top block's cell.
-        // Each block only reports the boxes inside its own cell (top boxes in the top block's local space), so a
-        // selection always belongs to the block that's actually there and placement/face logic behaves.
+        // The work item spans two block cells (voxel layers 0-5 in the stump's, 6-15 in the top block's).
+        // Both blocks report every selection box (the top block's shifted into its own space) so the highlight
+        // always covers the whole log; the same index maps to the same voxel on either block.
+        // Collision is split per cell so the blocks don't overlap physically.
         List<Cuboidf> selectionBoxes = new List<Cuboidf>();
         List<Vec3i?> selectionVoxels = new List<Vec3i?>();
-        List<Cuboidf> topSelectionBoxes = new List<Cuboidf>();
-        List<Vec3i?> topSelectionVoxels = new List<Vec3i?>();
         List<Cuboidf> collisionBoxes = new List<Cuboidf>();
         List<Cuboidf> topCollisionBoxes = new List<Cuboidf>();
 
@@ -612,20 +610,15 @@ public class BEChoppingBlock : BlockEntity
                         if (hasExposedFace)
                         {
                             float py = y + yStart;
-                            bool inTopCell = py >= 16;
-                            if (inTopCell) py -= 16;
-
-                            var box = new Cuboidf(
+                            selectionBoxes.Add(new Cuboidf(
                                 x / 16f,
                                 py / 16f,
                                 z / 16f,
                                 (x + 1) / 16f,
                                 (py + 1) / 16f,
                                 (z + 1) / 16f
-                            );
-
-                            (inTopCell ? topSelectionBoxes : selectionBoxes).Add(box);
-                            (inTopCell ? topSelectionVoxels : selectionVoxels).Add(new Vec3i(x, y, z));
+                            ));
+                            selectionVoxels.Add(new Vec3i(x, y, z));
                         }
                     }
                 }
@@ -652,22 +645,20 @@ public class BEChoppingBlock : BlockEntity
         }
 
         SelectionBoxes = selectionBoxes.ToArray();
+        TopSelectionBoxes = selectionBoxes.Select(b => b.OffsetCopy(0, -1, 0)).ToArray();
         SelectionVoxels = selectionVoxels.ToArray();
-        TopSelectionBoxes = topSelectionBoxes.ToArray();
-        TopSelectionVoxels = topSelectionVoxels.ToArray();
         CollisionBoxes = collisionBoxes.ToArray();
         TopCollisionBoxes = topCollisionBoxes.ToArray();
     }
 
     /// <summary>
-    /// Maps a selection box index on the stump (<paramref name="onTopBlock"/> false) or top block to the voxel it covers.
+    /// Maps a selection box index (on either the stump or the top block) to the voxel it covers.
     /// Returns null for the stump itself or an out of range index.
     /// </summary>
-    public Vec3i? GetSelectedVoxel(bool onTopBlock, int selectionBoxIndex)
+    public Vec3i? GetSelectedVoxel(int selectionBoxIndex)
     {
-        Vec3i?[] voxels = onTopBlock ? TopSelectionVoxels : SelectionVoxels;
-        if (selectionBoxIndex < 0 || selectionBoxIndex >= voxels.Length) return null;
-        return voxels[selectionBoxIndex];
+        if (selectionBoxIndex < 0 || selectionBoxIndex >= SelectionVoxels.Length) return null;
+        return SelectionVoxels[selectionBoxIndex];
     }
 
     public override void OnBlockRemoved()

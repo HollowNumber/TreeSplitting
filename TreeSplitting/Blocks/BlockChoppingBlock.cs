@@ -1,7 +1,9 @@
-﻿using Vintagestory.API.Client;
+﻿using System.Linq;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 using TreeSplitting.BlockEntities;
 
@@ -23,6 +25,60 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
         {
             world.BlockAccessor.SetBlock(0, upPos);
         }
+    }
+
+    public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer)
+    {
+        if (api is not ICoreClientAPI capi || world.BlockAccessor.GetBlockEntity(selection.Position) is not BEChoppingBlock be)
+        {
+            return base.GetPlacedBlockInteractionHelp(world, selection, forPlayer);
+        }
+
+        WorldInteraction[] interactions;
+        if (be.WorkItemStack == null)
+        {
+            interactions = [new WorldInteraction
+            {
+                ActionLangCode = "treesplitting:blockhelp-choppingblock-place",
+                MouseButton = EnumMouseButton.Right,
+                HotKeyCode = "shift",
+                Itemstacks = GetLogStacks(capi)
+            }];
+        }
+        else if (be.SelectedRecipe == null)
+        {
+            interactions =
+            [
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-pickrecipe", MouseButton = EnumMouseButton.Right },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
+            ];
+        }
+        else
+        {
+            interactions =
+            [
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-chop", MouseButton = EnumMouseButton.Left, Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Axe) },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-saw", MouseButton = EnumMouseButton.Left, Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Saw) },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-carve", MouseButton = EnumMouseButton.Left, Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Knife).Concat(ObjectCacheUtil.GetToolStacks(capi, EnumTool.Chisel)).ToArray() },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-toolmode", HotKeyCode = "toolmodeselect", MouseButton = EnumMouseButton.None },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
+            ];
+        }
+
+        return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
+    }
+
+    // Every log that has at least one hewing recipe, worked out once
+    private static ItemStack[] GetLogStacks(ICoreClientAPI capi)
+    {
+        return ObjectCacheUtil.GetOrCreate(capi, "treesplittingLogStacks", () =>
+        {
+            var recipes = TreeSplittingModSystem.GetRecipes(capi);
+            return capi.World.Blocks
+                .Where(b => b.Code != null && recipes.Any(r => r.Matches(capi.World, new ItemStack(b))))
+                .Select(b => new ItemStack(b))
+                .ToArray();
+        });
     }
 
     public override bool OnBlockInteractStart(IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel)

@@ -1,3 +1,4 @@
+using TreeSplitting.BlockEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,8 +35,8 @@ public class AxePatches
             modes[0] = new SkillItem() { Code = new AssetLocation("chopping-down"), Name = "Chop Vertical" }.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpDown(cr, x, y, width, height, rgba, GameMath.PI));
 
             modes[1] = new SkillItem() { Code = new AssetLocation("chopping-sideways"), Name = "Chop Horizontal" }.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
-            
-            
+
+
             return modes;
         });
     }
@@ -47,9 +48,8 @@ public class AxePatches
         if (!(__instance is ItemAxe)) return;
         if (blockSel == null) return;
 
-        Block block = forPlayer.Entity.World.BlockAccessor.GetBlock(blockSel.Position);
-        // Allow both Base and Top blocks
-        if (block is not (BlockChoppingBlock or BlockChoppingBlockTop)) return;
+        // The stump or the space above it
+        if (BEChoppingBlock.AtPosition(forPlayer.Entity.World.BlockAccessor, blockSel.Position) == null) return;
 
         if (CustomModes == null) return;
 
@@ -63,13 +63,13 @@ public class AxePatches
             __result = __result.Concat(CustomModes).ToArray();
         }
     }
-    
+
     [HarmonyPrefix]
     [HarmonyPatch(typeof(CollectibleObject), "SetToolMode")]
     public static bool onSetToolMode(CollectibleObject __instance, ItemSlot slot, IPlayer byPlayer, BlockSelection blockSelection, int toolMode)
     {
         if (!(__instance is ItemAxe)) return true;
-        
+
         slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
         return false; // Skip original
     }
@@ -90,7 +90,10 @@ public class AxePatches
     {
         if (!(__instance is ItemAxe)) return;
 
-        for (int i = 0; CustomModes != null && i < CustomModes.Length; i++) CustomModes[i]?.Dispose();
+        // Every axe type gets here, only dispose them once
+        if (CustomModes == null) return;
+        foreach (var mode in CustomModes) mode?.Dispose();
+        CustomModes = null;
 
     }
 

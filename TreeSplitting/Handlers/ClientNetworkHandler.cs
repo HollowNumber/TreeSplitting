@@ -1,5 +1,4 @@
 using TreeSplitting.BlockEntities;
-using TreeSplitting.Blocks;
 using TreeSplitting.Network;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -11,6 +10,11 @@ public class ClientNetworkHandler
 {
     private readonly ICoreClientAPI _capi;
     private readonly IClientNetworkChannel _channel;
+    private static readonly AssetLocation ChopSound = new("game:sounds/block/chop2");
+
+    // Hold to chop, like the anvil. Started by a click on the log, keeps swinging while the button is held
+    private bool _holding;
+    private long _lastSwingMs;
 
 
     public ClientNetworkHandler(ICoreClientAPI capi)
@@ -20,65 +24,91 @@ public class ClientNetworkHandler
         _channel = capi.Network.GetChannel("treesplitting");
 
         capi.Event.MouseDown += OnMouseDown;
+        capi.Event.MouseUp += OnMouseUp;
+        capi.Event.RegisterGameTickListener(OnTick, 50);
     }
 
     private void OnMouseDown(MouseEvent e)
     {
         if (e.Button != EnumMouseButton.Left) return;
 
-        // We assume that if the mouse isn't grabbed the player is in some ui and therefore we dont interact.
-        if (!_capi.Input.MouseGrabbed) return;
+        SwingResult result = TrySwing();
+        if (result == SwingResult.None) return;
 
+        // If you miss the log, don't let the game break the chopping block instead
+        e.Handled = true;
+
+        if (result == SwingResult.Swung)
+        {
+            _holding = true;
+            _lastSwingMs = _capi.ElapsedMilliseconds;
+        }
+    }
+
+    private void OnMouseUp(MouseEvent e)
+    {
+        if (e.Button == EnumMouseButton.Left) _holding = false;
+    }
+
+    private void OnTick(float dt)
+    {
+        if (!_holding) return;
+
+        // Let go, or tabbed into a menu
+        if (!_capi.Input.MouseButton.Left || !_capi.Input.MouseGrabbed)
+        {
+            _holding = false;
+            return;
+        }
+
+        int interval = TreeSplittingModSystem.GetConfig(_capi).SwingIntervalMs;
+        if (_capi.ElapsedMilliseconds - _lastSwingMs < interval) return;
+
+        // Keep holding even if you look away for a moment, it just won't swing until you're back on the log
+        if (TrySwing() == SwingResult.Swung) _lastSwingMs = _capi.ElapsedMilliseconds;
+    }
+
+    private enum SwingResult
+    {
+        None,       // not a log we can work, leave the click alone
+        Blocked,    // looking at a log but not a voxel, eat the click
+        Swung
+    }
+
+    private SwingResult TrySwing()
+    {
+        // We assume that if the mouse isn't grabbed the player is in some ui and therefore we dont interact.
+        if (!_capi.Input.MouseGrabbed) return SwingResult.None;
 
         BlockSelection sel = _capi.World.Player.CurrentBlockSelection;
-        if (sel is null) return;
+        if (sel is null) return SwingResult.None;
 
-        Block block = _capi.World.BlockAccessor.GetBlock(sel.Position);
-
-        if (block is not (BlockChoppingBlockTop or BlockChoppingBlock))
-            return;
+        BEChoppingBlock? be = BEChoppingBlock.AtPosition(_capi.World.BlockAccessor, sel.Position);
+        if (be is null) return SwingResult.None;
 
         ItemSlot activeSlot = _capi.World.Player.InventoryManager.ActiveHotbarSlot;
         ItemStack heldItemStack = activeSlot.Itemstack;
 
-        if (heldItemStack?.Item?.Tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
+        EnumTool? tool = heldItemStack?.Collectible?.Tool;
+        if (heldItemStack is null || tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return SwingResult.None;
 
-        
-        if (heldItemStack?.Item?.Tool is EnumTool.Chisel )
+        if (tool is EnumTool.Chisel)
         {
-            string offhand = _capi.World.Player.InventoryManager.OffhandHotbarSlot.Itemstack?.Item?.Code.ToString();
-
-            if (offhand is null || !offhand.Contains("hammer"))
+            if (_capi.World.Player.InventoryManager.OffhandHotbarSlot.Itemstack?.Collectible?.Tool is not EnumTool.Hammer)
             {
                 //The game does this automatically _capi.TriggerIngameError(new AssetLocation("treesplitting"), "chiselhammer", "You need to hold a hammer in your offhand to chisel wood voxels.");
-                return;     
+                return SwingResult.None;
             }
-           
+
         }
-        
-        BlockPos pos = sel.Position;
 
-        if (block is BlockChoppingBlockTop) pos = pos.DownCopy();
+        Vec3i? voxel = be.GetSelectedVoxel(sel.SelectionBoxIndex);
+        if (voxel is null) return be.WorkItemStack != null ? SwingResult.Blocked : SwingResult.None;
 
-        BEChoppingBlock be = _capi.World.BlockAccessor.GetBlockEntity<BEChoppingBlock>(pos);
-
-        if (be is null) return;
-
-        if (sel.SelectionBoxIndex <= 0 || sel.SelectionBoxIndex >= be.SelectionBoxes.Length) return;
-        e.Handled = true;
-
-        // Calculate voxel coord
-
-        Cuboidf box = be.SelectionBoxes[sel.SelectionBoxIndex];
-
-        int x = (int)(box.X1 * 16);
-        int y = (int)((box.Y1 * 16) - 10);
-        int z = (int)(box.Z1 * 16);
-
+        BlockPos pos = be.Pos;
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 
-        _capi.Logger.Debug($"Calling Animation for {heldItemStack.Item.Code.Path} at {pos} with mode {mode}");
-        string anim = heldItemStack.Item.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+        string anim = heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
 
         // So we default to "axehit" if the item is silent.
         if (string.IsNullOrEmpty(anim)) anim = "axehit";
@@ -86,17 +116,19 @@ public class ClientNetworkHandler
         _capi.World.Player.Entity.StartAnimation(anim);
         _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
 
-        _capi.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), pos.X, pos.Y, pos.Z, _capi.World.Player);
+        _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
 
         _channel.SendPacket(new ToolActionPacket()
         {
             Pos = pos,
-            VoxelX = x,
-            VoxelY = y,
-            VoxelZ = z,
+            VoxelX = voxel.X,
+            VoxelY = voxel.Y,
+            VoxelZ = voxel.Z,
             FaceIndex = sel.Face.Index,
             ToolMode = mode,
         });
+
+        return SwingResult.Swung;
     }
 
 }

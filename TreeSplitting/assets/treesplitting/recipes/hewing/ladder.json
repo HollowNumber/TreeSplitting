@@ -7,7 +7,7 @@
   },
   "output": {
     "type": "block",
-    "code": "game:ladder-wood-north",
+    "code": "game:ladder-wood-{wood}-north",
     "stackSize": 2
   },
   "pattern": [

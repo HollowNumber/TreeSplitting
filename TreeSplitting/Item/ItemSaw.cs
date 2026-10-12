@@ -1,3 +1,4 @@
+using TreeSplitting.BlockEntities;
 using TreeSplitting.Blocks;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
@@ -47,8 +48,7 @@ public class ItemSaw : Vintagestory.API.Common.Item
     public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
     {
         if (blockSel is null) return null;
-        Block block = forPlayer.Entity.World.BlockAccessor.GetBlock(blockSel.Position);
-        return block is BlockChoppingBlock or BlockChoppingBlockTop ? toolModes : null;
+        return BEChoppingBlock.AtPosition(forPlayer.Entity.World.BlockAccessor, blockSel.Position) != null ? toolModes : null;
     }
 
     public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSelection)

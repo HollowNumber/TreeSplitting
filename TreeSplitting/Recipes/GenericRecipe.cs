@@ -1,16 +1,22 @@
 using System;
+using System.IO;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
 namespace TreeSplitting.Recipes;
 
-public abstract class GenericRecipe
+/// <summary>
+/// Needs to be byte serializable so the server can send the recipes to clients, they don't load the recipes folder themselves.
+/// </summary>
+public abstract class GenericRecipe : IByteSerializable
 {
     // Common properties
     public AssetLocation Code { get; set; }
     public JsonItemStack Ingredient { get; set; }
     public JsonItemStack Output { get; set; }
     public string[][] Pattern { get; set; }
+    // If true the log gets laid on its side (grain along X) when you pick this recipe
+    public bool Horizontal { get; set; }
     public bool[,,] Voxels { get; protected set; }
 
     // Configurable settings
@@ -18,17 +24,54 @@ public abstract class GenericRecipe
     protected virtual char SolidChar => '#';
     protected virtual char EmptyChar => '_';
 
+    public void ToBytes(BinaryWriter writer)
+    {
+        writer.Write(Code.ToShortString());
+        Ingredient.ToBytes(writer);
+        Output.ToBytes(writer);
+
+        writer.Write(Horizontal);
+        writer.Write(Pattern?.Length ?? 0);
+        foreach (string[] layer in Pattern ?? [])
+        {
+            writer.Write(layer.Length);
+            foreach (string row in layer) writer.Write(row);
+        }
+    }
+
+    public void FromBytes(BinaryReader reader, IWorldAccessor resolver)
+    {
+        Code = new AssetLocation(reader.ReadString());
+
+        Ingredient = new JsonItemStack();
+        Ingredient.FromBytes(reader, resolver);
+        Output = new JsonItemStack();
+        Output.FromBytes(reader, resolver);
+
+        Horizontal = reader.ReadBoolean();
+        Pattern = new string[reader.ReadInt32()][];
+        for (int i = 0; i < Pattern.Length; i++)
+        {
+            Pattern[i] = new string[reader.ReadInt32()];
+            for (int j = 0; j < Pattern[i].Length; j++) Pattern[i][j] = reader.ReadString();
+        }
+
+        ParsePattern();
+    }
+
     /// <summary>
-    /// Resolves the recipe - parses pattern and resolves item stacks.
+    /// Resolves the item stacks, blocks and items need to be loaded first (AssetsFinalize).
+    /// Skips wildcard/{wood} codes since those get worked out when you actually use the recipe.
     /// </summary>
     public virtual void Resolve(IWorldAccessor world)
     {
-        // Resolve items
-        Ingredient.Resolve(world, GetIngredientName());
-        Output.Resolve(world, GetOutputName());
+        if (!IsPatternCode(Ingredient.Code)) Ingredient.Resolve(world, GetIngredientName());
+        if (!IsPatternCode(Output.Code)) Output.Resolve(world, GetOutputName());
+    }
 
-        // Parse pattern into voxels
-        ParsePattern();
+    private static bool IsPatternCode(AssetLocation code)
+    {
+        return code.Path.Contains('*') || code.Path.Contains('{');
     }
 
     /// <summary>
@@ -36,21 +79,16 @@ public abstract class GenericRecipe
     /// </summary>
     public virtual bool Matches(IWorldAccessor worldAccessor, ItemStack inputStack)
     {
-        if (inputStack == null) return false;
-
-        // Try resolved itemstack first
-        if (Ingredient.ResolvedItemstack != null)
-        {
-            if (Ingredient.Matches(worldAccessor, inputStack)) return true;
-        }
+        if (inputStack?.Collectible?.Code == null) return false;
 
         // Handle wildcards
-        if (Ingredient.Code.Path.Contains("*"))
+        if (Ingredient.Code.Path.Contains('*'))
         {
             return WildcardUtil.Match(Ingredient.Code, inputStack.Collectible.Code);
         }
 
-        return false;
+        // Just compare the code so it works on the client too, it never resolves
+        return Ingredient.Code.Equals(inputStack.Collectible.Code);
     }
 
     /// <summary>
@@ -136,10 +174,7 @@ public abstract class GenericRecipe
             return null;
         }
 
-        int quantity = 1; 
-        
-        if (Output.Quantity != null) quantity = Output.Quantity;
-
+        int quantity = Math.Max(1, Output.StackSize);
 
         var block = world.GetBlock(finalLoc);
         if (block?.Code != null) return new ItemStack(block, quantity);
@@ -151,7 +186,7 @@ public abstract class GenericRecipe
         return null;
     }
 
-    protected void ParsePattern()
+    public void ParsePattern()
     {
         if (Pattern == null) return;
 

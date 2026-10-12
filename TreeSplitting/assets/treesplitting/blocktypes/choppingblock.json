@@ -2,6 +2,12 @@
   "code": "choppingblock",
   "class": "treesplitting.choppingblock",
   "entityClass": "treesplitting.choppingblockentity",
+  "behaviors": [
+    {
+      "name": "Multiblock",
+      "properties": { "sizex": 1, "sizey": 2, "sizez": 1, "cposition": { "x": 0, "y": 0, "z": 0 } }
+    }
+  ],
   "creativeinventory": {
     "general": ["*"],
     "functional": ["*"]

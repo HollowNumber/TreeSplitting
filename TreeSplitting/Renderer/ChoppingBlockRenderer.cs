@@ -49,8 +49,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         // Start big enough for a full log so it doesn't keep resizing
         MeshData mesh = new MeshData(4096, 6144, false, true, true, true);
-            
-        float yStart = 10.0f; 
+
+        float yStart = 10.0f;
 
         CollectibleObject collectible = workItem.Item ?? (CollectibleObject)workItem.Block;
         ITexPositionSource texSource;
@@ -97,11 +97,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                         float uvYMin = y / 16f;
                         float uvYMax = (y + 1) / 16f;
 
-                        // Determine which texture to use for side faces based on material type
-                        // - Bark (3) = outer bark layer, use side/bark texture
-                        // - Heartwood (1) and Sapwood (2) = inner wood, use top/wood grain texture
-                        //   (Both represent exposed inner wood when visible)
-                        TextureAtlasPosition sideTexForVoxel = (voxelMaterial == (byte)EnumWoodMaterial.Bark) ? sideTex : topTex;
+                        // Bark gets the bark texture on its sides, inner wood gets the rings (see below)
                         bool isInnerWood = (voxelMaterial != (byte)EnumWoodMaterial.Bark);
 
                         // Face culling - only render faces exposed to air
@@ -129,20 +125,26 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                                 VertexFlags.PackNormal(0, -1, 0));
                         }
 
+                        // Cut sides of the inner wood: take the row of the end grain texture at this face's depth and
+                        // stretch it up the face. Rings show up as stripes that line up with the rings on top, like real wood
+                        // (the end grain is 32px so +0.25/+0.75 of a voxel picks the texel right at the surface)
+                        float ringRowZNorth = (z + 0.25f) / 16f;
+                        float ringRowZSouth = (z + 0.75f) / 16f;
+                        float ringRowXWest = (x + 0.25f) / 16f;
+                        float ringRowXEast = (x + 0.75f) / 16f;
+
                         // NORTH face (Z-) - normal pointing north (0, 0, -1)
-                        // For inner wood (heartwood/sapwood), rotate UV 90 degrees so grain runs vertically
                         if (z == 0 || voxels[x, y, z - 1] == 0)
                         {
                             if (isInnerWood)
-                                AddFace(mesh, sideTexForVoxel,
-                                    xMax, yMin, zMin,
-                                    xMin, yMin, zMin,
-                                    xMin, yMax, zMin,
-                                    xMax, yMax, zMin,
-                                    uvYMin, uvXMin, uvYMax, uvXMax,
+                                AddFaceUv(mesh, topTex,
+                                    xMax, yMin, zMin, uvXMax, ringRowZNorth,
+                                    xMin, yMin, zMin, uvXMin, ringRowZNorth,
+                                    xMin, yMax, zMin, uvXMin, ringRowZNorth,
+                                    xMax, yMax, zMin, uvXMax, ringRowZNorth,
                                     VertexFlags.PackNormal(0, 0, -1));
                             else
-                                AddFace(mesh, sideTexForVoxel,
+                                AddFace(mesh, sideTex,
                                     xMax, yMin, zMin,
                                     xMin, yMin, zMin,
                                     xMin, yMax, zMin,
@@ -155,15 +157,14 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                         if (z == 15 || voxels[x, y, z + 1] == 0)
                         {
                             if (isInnerWood)
-                                AddFace(mesh, sideTexForVoxel,
-                                    xMin, yMin, zMax,
-                                    xMax, yMin, zMax,
-                                    xMax, yMax, zMax,
-                                    xMin, yMax, zMax,
-                                    uvYMin, uvXMin, uvYMax, uvXMax,
+                                AddFaceUv(mesh, topTex,
+                                    xMin, yMin, zMax, uvXMin, ringRowZSouth,
+                                    xMax, yMin, zMax, uvXMax, ringRowZSouth,
+                                    xMax, yMax, zMax, uvXMax, ringRowZSouth,
+                                    xMin, yMax, zMax, uvXMin, ringRowZSouth,
                                     VertexFlags.PackNormal(0, 0, 1));
                             else
-                                AddFace(mesh, sideTexForVoxel,
+                                AddFace(mesh, sideTex,
                                     xMin, yMin, zMax,
                                     xMax, yMin, zMax,
                                     xMax, yMax, zMax,
@@ -176,15 +177,14 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                         if (x == 0 || voxels[x - 1, y, z] == 0)
                         {
                             if (isInnerWood)
-                                AddFace(mesh, sideTexForVoxel,
-                                    xMin, yMin, zMin,
-                                    xMin, yMin, zMax,
-                                    xMin, yMax, zMax,
-                                    xMin, yMax, zMin,
-                                    uvYMin, uvZMin, uvYMax, uvZMax,
+                                AddFaceUv(mesh, topTex,
+                                    xMin, yMin, zMin, ringRowXWest, uvZMin,
+                                    xMin, yMin, zMax, ringRowXWest, uvZMax,
+                                    xMin, yMax, zMax, ringRowXWest, uvZMax,
+                                    xMin, yMax, zMin, ringRowXWest, uvZMin,
                                     VertexFlags.PackNormal(-1, 0, 0));
                             else
-                                AddFace(mesh, sideTexForVoxel,
+                                AddFace(mesh, sideTex,
                                     xMin, yMin, zMin,
                                     xMin, yMin, zMax,
                                     xMin, yMax, zMax,
@@ -197,15 +197,14 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                         if (x == 15 || voxels[x + 1, y, z] == 0)
                         {
                             if (isInnerWood)
-                                AddFace(mesh, sideTexForVoxel,
-                                    xMax, yMin, zMax,
-                                    xMax, yMin, zMin,
-                                    xMax, yMax, zMin,
-                                    xMax, yMax, zMax,
-                                    uvYMin, uvZMin, uvYMax, uvZMax,
+                                AddFaceUv(mesh, topTex,
+                                    xMax, yMin, zMax, ringRowXEast, uvZMax,
+                                    xMax, yMin, zMin, ringRowXEast, uvZMin,
+                                    xMax, yMax, zMin, ringRowXEast, uvZMin,
+                                    xMax, yMax, zMax, ringRowXEast, uvZMax,
                                     VertexFlags.PackNormal(1, 0, 0));
                             else
-                                AddFace(mesh, sideTexForVoxel,
+                                AddFace(mesh, sideTex,
                                     xMax, yMin, zMax,
                                     xMax, yMin, zMin,
                                     xMax, yMax, zMin,
@@ -350,6 +349,38 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     /// <param name="uvMaxX">UV X maximum (normalized 0-1)</param>
     /// <param name="uvMaxY">UV Y maximum (normalized 0-1)</param>
     /// <param name="normalFlags">Packed normal flags for lighting</param>
+    /// <summary>
+    /// Same as AddFace but you give the uv (0-1 in the texture) for each corner yourself
+    /// </summary>
+    private void AddFaceUv(MeshData mesh, TextureAtlasPosition tex,
+        float x0, float y0, float z0, float u0, float v0,
+        float x1, float y1, float z1, float u1, float v1,
+        float x2, float y2, float z2, float u2, float v2,
+        float x3, float y3, float z3, float u3, float v3,
+        int normalFlags)
+    {
+        int baseIndex = mesh.VerticesCount;
+        float w = tex.x2 - tex.x1;
+        float h = tex.y2 - tex.y1;
+
+        mesh.AddVertex(x0, y0, z0, tex.x1 + u0 * w, tex.y1 + v0 * h, WhiteColor);
+        mesh.AddVertex(x1, y1, z1, tex.x1 + u1 * w, tex.y1 + v1 * h, WhiteColor);
+        mesh.AddVertex(x2, y2, z2, tex.x1 + u2 * w, tex.y1 + v2 * h, WhiteColor);
+        mesh.AddVertex(x3, y3, z3, tex.x1 + u3 * w, tex.y1 + v3 * h, WhiteColor);
+
+        if (mesh.Flags != null)
+        {
+            for (int i = 0; i < 4; i++) mesh.Flags[baseIndex + i] = normalFlags;
+        }
+
+        mesh.AddIndex(baseIndex + 0);
+        mesh.AddIndex(baseIndex + 1);
+        mesh.AddIndex(baseIndex + 2);
+        mesh.AddIndex(baseIndex + 0);
+        mesh.AddIndex(baseIndex + 2);
+        mesh.AddIndex(baseIndex + 3);
+    }
+
     private void AddFace(MeshData mesh, TextureAtlasPosition tex,
         float x0, float y0, float z0,
         float x1, float y1, float z1,
@@ -371,7 +402,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         mesh.AddVertex(x1, y1, z1, u1, v0, WhiteColor);
         mesh.AddVertex(x2, y2, z2, u1, v1, WhiteColor);
         mesh.AddVertex(x3, y3, z3, u0, v1, WhiteColor);
-            
+
         // Set flags for proper lighting (normals)
         if (mesh.Flags != null && normalFlags != 0)
         {
@@ -414,11 +445,11 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         prog.Stop();
     }
 
-    public void Dispose() 
-    { 
-        api.Event.UnregisterRenderer(this, EnumRenderStage.Opaque); 
-        api.Event.UnregisterRenderer(this, EnumRenderStage.AfterFinalComposition); 
-        meshRef?.Dispose(); 
-        overlayMeshRef?.Dispose(); 
+    public void Dispose()
+    {
+        api.Event.UnregisterRenderer(this, EnumRenderStage.Opaque);
+        api.Event.UnregisterRenderer(this, EnumRenderStage.AfterFinalComposition);
+        meshRef?.Dispose();
+        overlayMeshRef?.Dispose();
     }
 }

@@ -32,6 +32,8 @@ public class BEChoppingBlock : BlockEntity
     public ItemStack? WorkItemStack;
     // Log lying on its side with the grain running along X, for recipes that need it
     public bool Horizontal;
+    // Once you've cut into it you can't tip it over anymore
+    public bool HasBeenCut;
     public AssetLocation? SelectedRecipeCode;
     public HewingRecipe? SelectedRecipe; // Runtime only
 
@@ -131,6 +133,7 @@ public class BEChoppingBlock : BlockEntity
         base.ToTreeAttributes(tree);
         tree.SetItemstack("workItem", WorkItemStack);
         tree.SetBool("horizontal", Horizontal);
+        tree.SetBool("hasBeenCut", HasBeenCut);
 
         // byte[,,] is laid out x, y, z in memory, so we can just copy it straight into a flat array
         byte[] flatVoxels = new byte[16 * 16 * 16];
@@ -145,6 +148,7 @@ public class BEChoppingBlock : BlockEntity
         base.FromTreeAttributes(tree, worldAccessForResolve);
         WorkItemStack = tree.GetItemstack("workItem");
         Horizontal = tree.GetBool("horizontal");
+        HasBeenCut = tree.GetBool("hasBeenCut");
 
         if (WorkItemStack != null)
         {
@@ -188,9 +192,16 @@ public class BEChoppingBlock : BlockEntity
         SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
         if (SelectedRecipe != null)
         {
-            // You pick the recipe before cutting, so just lay the log down (or stand it back up) to match
+            // The picker only shows recipes for how the log sits, this is just in case
             if (SelectedRecipe.Horizontal != Horizontal)
             {
+                if (HasBeenCut)
+                {
+                    SelectedRecipe = null;
+                    SelectedRecipeCode = null;
+                    return;
+                }
+
                 Horizontal = SelectedRecipe.Horizontal;
                 GenerateLogVoxels();
             }
@@ -202,6 +213,7 @@ public class BEChoppingBlock : BlockEntity
 
     public bool OnInteract(IPlayer byPlayer, BlockSelection blockSel)
     {
+        if (WorkItemStack != null && byPlayer.Entity.Controls.CtrlKey) return TryRotateLog(byPlayer);
         if (WorkItemStack == null && byPlayer.Entity.Controls.ShiftKey) return TryPutLog(byPlayer);
         if (WorkItemStack != null && byPlayer.Entity.Controls.ShiftKey) return TryTakeLog(byPlayer);
 
@@ -214,6 +226,31 @@ public class BEChoppingBlock : BlockEntity
         return false;
     }
 
+    public bool CanRotate => WorkItemStack != null && !HasBeenCut;
+
+    // Ctrl + right click tips the log onto its side or stands it back up, which recipes you get depends on how it sits
+    private bool TryRotateLog(IPlayer byPlayer)
+    {
+        if (!CanRotate) return false;
+
+        Horizontal = !Horizontal;
+        SelectedRecipe = null;
+        SelectedRecipeCode = null;
+        GenerateLogVoxels();
+
+        Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, byPlayer);
+        RegenSelectionBoxes();
+        MarkDirty();
+
+        if (Api.Side == EnumAppSide.Client)
+        {
+            dialog?.TryClose();
+            OpenRecipeDialog(byPlayer);
+        }
+
+        return true;
+    }
+
     private void OpenRecipeDialog(IPlayer player)
     {
         var capi = Api as ICoreClientAPI;
@@ -224,7 +261,7 @@ public class BEChoppingBlock : BlockEntity
 
         foreach (var recipe in TreeSplittingModSystem.GetRecipes(Api))
         {
-            if (recipe.Matches(Api.World, WorkItemStack))
+            if (recipe.Horizontal == Horizontal && recipe.Matches(Api.World, WorkItemStack))
             {
                 ItemStack outStack = recipe.GenerateOutput(WorkItemStack, Api.World);
 
@@ -292,6 +329,7 @@ public class BEChoppingBlock : BlockEntity
         }
 
         int removed = woodBefore - CountWood();
+        if (removed > 0) HasBeenCut = true;
         SpawnWoodChips(chipStack, voxelPos, facing, removed);
         if (removed > 0) DamageTool(byPlayer, tool.Value);
 
@@ -429,6 +467,7 @@ public class BEChoppingBlock : BlockEntity
         SelectedRecipe = null;
         SelectedRecipeCode = null;
         Horizontal = false;
+        HasBeenCut = false;
 
         GenerateLogVoxels();
 
@@ -575,6 +614,7 @@ public class BEChoppingBlock : BlockEntity
         SelectedRecipeCode = null;
         Voxels = new byte[16, 16, 16];
         Horizontal = false;
+        HasBeenCut = false;
         RegenSelectionBoxes();
         MarkDirty();
     }

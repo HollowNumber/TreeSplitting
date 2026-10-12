@@ -65,6 +65,17 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             ];
         }
 
+        // Tipping the log over works until you start cutting
+        if (be.CanRotate)
+        {
+            interactions = interactions.Append(new WorldInteraction
+            {
+                ActionLangCode = be.Horizontal ? "treesplitting:blockhelp-choppingblock-standup" : "treesplitting:blockhelp-choppingblock-laydown",
+                MouseButton = EnumMouseButton.Right,
+                HotKeyCode = "ctrl"
+            });
+        }
+
         return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
     }
 

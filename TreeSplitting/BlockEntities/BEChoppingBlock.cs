@@ -257,7 +257,6 @@ public class BEChoppingBlock : BlockEntity
         dialog.TryOpen();
     }
 
-    // TODO: Make tools use durability
     public void OnUseOver(IPlayer byPlayer, Vec3i voxelPos, BlockFacing facing, int toolMode
     )
     {
@@ -292,11 +291,34 @@ public class BEChoppingBlock : BlockEntity
                 break;
         }
 
-        SpawnWoodChips(chipStack, voxelPos, facing, woodBefore - CountWood());
+        int removed = woodBefore - CountWood();
+        SpawnWoodChips(chipStack, voxelPos, facing, removed);
+        if (removed > 0) DamageTool(byPlayer, tool.Value);
 
         CheckIfFinished(byPlayer);
         RegenSelectionBoxes();
         MarkDirty();
+    }
+
+    // Only wears the tool when you actually cut something
+    private void DamageTool(IPlayer byPlayer, EnumTool tool)
+    {
+        if (Api.Side != EnumAppSide.Server) return;
+
+        TreeSplittingConfig config = TreeSplittingModSystem.GetConfig(Api);
+        int cost = tool switch
+        {
+            EnumTool.Axe => config.AxeDurabilityCost,
+            EnumTool.Saw => config.SawDurabilityCost,
+            EnumTool.Knife => config.KnifeDurabilityCost,
+            EnumTool.Chisel => config.ChiselDurabilityCost,
+            _ => 0
+        };
+        cost = (int)Math.Round(cost * config.ToolDurabilityMultiplier);
+        if (cost <= 0) return;
+
+        ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
+        slot.Itemstack?.Collectible.DamageItem(Api.World, byPlayer.Entity, slot, cost);
     }
 
     private int CountWood()

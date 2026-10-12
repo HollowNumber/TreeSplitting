@@ -1,4 +1,4 @@
-namespace TreeSplitting.Config;
+﻿namespace TreeSplitting.Config;
 
 /// <summary>
 /// Lives in ModConfig/treesplitting.json. Everything except the swing speed is decided by the server.

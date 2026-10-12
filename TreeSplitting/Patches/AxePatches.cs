@@ -1,4 +1,4 @@
-﻿using TreeSplitting.BlockEntities;
+using TreeSplitting.BlockEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;

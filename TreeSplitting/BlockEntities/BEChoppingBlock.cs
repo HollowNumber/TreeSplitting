@@ -257,6 +257,10 @@ public class BEChoppingBlock : BlockEntity
 
         if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] == (byte)EnumWoodMaterial.Empty) return;
 
+        // Grab these before the cut, finishing the recipe clears the work item
+        ItemStack chipStack = WorkItemStack;
+        int woodBefore = CountWood();
+
         switch (tool)
         {
             case EnumTool.Axe:
@@ -272,9 +276,38 @@ public class BEChoppingBlock : BlockEntity
                 break;
         }
 
+        SpawnWoodChips(chipStack, voxelPos, facing, woodBefore - CountWood());
+
         CheckIfFinished(byPlayer);
         RegenSelectionBoxes();
         MarkDirty();
+    }
+
+    private int CountWood()
+    {
+        int count = 0;
+        foreach (byte voxel in Voxels)
+        {
+            if (voxel != (byte)EnumWoodMaterial.Empty) count++;
+        }
+        return count;
+    }
+
+    // Chips fly off the side you hit, more wood cut means more chips. Runs on the server so everyone sees them
+    private void SpawnWoodChips(ItemStack stack, Vec3i voxelPos, BlockFacing facing, int removed)
+    {
+        if (removed <= 0) return;
+
+        Vec3d hitPos = new Vec3d(
+            Pos.X + (voxelPos.X + 0.5) / 16.0,
+            Pos.Y + (voxelPos.Y + 10.5) / 16.0,
+            Pos.Z + (voxelPos.Z + 0.5) / 16.0
+        );
+
+        Vec3f velocity = new Vec3f(facing.Normalf.X * 2f, 1.5f + facing.Normalf.Y, facing.Normalf.Z * 2f);
+        int quantity = GameMath.Clamp(removed / 3, 3, 30);
+
+        Api.World.SpawnCubeParticles(hitPos, stack, 0.2f, quantity, 0.5f, null, velocity);
     }
 
     private void RemoveVoxels(Vec3i start, Vec3i end, Vec3i step)

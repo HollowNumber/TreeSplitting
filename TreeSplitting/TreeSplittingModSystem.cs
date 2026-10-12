@@ -21,8 +21,8 @@ public class TreeSplittingModSystem : ModSystem
     //public static TreeSplittingConfig Config;
 
     /// <summary>
-    /// Hewing recipes for this side. Kept per mod system instance so the client and server
-    /// of a singleplayer world don't share (and race on) one list.
+    /// Hewing recipes for this side. The server loads them from assets; the game's recipe registry
+    /// syncs them to clients, since the "recipes" asset folder is only loaded on the server.
     /// </summary>
     public List<HewingRecipe> Recipes { get; private set; } = new();
 
@@ -44,6 +44,8 @@ public class TreeSplittingModSystem : ModSystem
 
         api.Network.RegisterChannel("treesplitting").RegisterMessageType<ToolActionPacket>()
             .RegisterMessageType<RecipeSelectPacket>();
+
+        Recipes = api.RegisterRecipeRegistry<RecipeRegistryGeneric<HewingRecipe>>("treesplitting:hewingrecipes").Recipes;
 
         string modid = Mod.Info.ModID;
 
@@ -68,13 +70,15 @@ public class TreeSplittingModSystem : ModSystem
     {
         base.AssetsLoaded(api);
 
-        LoadRecipes(api);
+        if (api.Side == EnumAppSide.Server) LoadRecipes(api);
     }
 
     // Blocks and items are registered by now, so recipe ingredients/outputs can be resolved.
     public override void AssetsFinalize(ICoreAPI api)
     {
         base.AssetsFinalize(api);
+
+        if (api.Side != EnumAppSide.Server) return;
 
         foreach (var recipe in Recipes)
         {
@@ -94,7 +98,9 @@ public class TreeSplittingModSystem : ModSystem
     {
         var recipes = api.Assets.GetMany<HewingRecipe>(api.Logger, "recipes/hewing");
 
-        Recipes = recipes
+        // Fill the registry's list in place; replacing it would stop the recipes from being synced.
+        Recipes.Clear();
+        Recipes.AddRange(recipes
             .Select(entry =>
             {
                 HewingRecipe recipe = entry.Value;
@@ -104,8 +110,7 @@ public class TreeSplittingModSystem : ModSystem
             })
             // Deduplicate
             .GroupBy(r => r.Code)
-            .Select(g => g.First())
-            .ToList();
+            .Select(g => g.First()));
 
         api.Logger.Notification("Loaded {0} tree splitting recipes", Recipes.Count);
     }
@@ -113,6 +118,8 @@ public class TreeSplittingModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         base.StartClientSide(api);
+
+        api.Event.LevelFinalize += () => api.Logger.Notification("Received {0} tree splitting recipes from the server", Recipes.Count);
 
         _clientNetworkHandler = new ClientNetworkHandler(api);
     }

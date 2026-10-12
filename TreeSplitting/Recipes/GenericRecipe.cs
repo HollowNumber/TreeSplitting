@@ -1,10 +1,15 @@
 using System;
+using System.IO;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
 namespace TreeSplitting.Recipes;
 
-public abstract class GenericRecipe
+/// <summary>
+/// Byte-serializable so the server can sync recipes to clients through a recipe registry;
+/// the client never loads the "recipes" asset folder itself.
+/// </summary>
+public abstract class GenericRecipe : IByteSerializable
 {
     // Common properties
     public AssetLocation Code { get; set; }
@@ -17,6 +22,39 @@ public abstract class GenericRecipe
     protected virtual int GridSize => 16;
     protected virtual char SolidChar => '#';
     protected virtual char EmptyChar => '_';
+
+    public void ToBytes(BinaryWriter writer)
+    {
+        writer.Write(Code.ToShortString());
+        Ingredient.ToBytes(writer);
+        Output.ToBytes(writer);
+
+        writer.Write(Pattern?.Length ?? 0);
+        foreach (string[] layer in Pattern ?? [])
+        {
+            writer.Write(layer.Length);
+            foreach (string row in layer) writer.Write(row);
+        }
+    }
+
+    public void FromBytes(BinaryReader reader, IWorldAccessor resolver)
+    {
+        Code = new AssetLocation(reader.ReadString());
+
+        Ingredient = new JsonItemStack();
+        Ingredient.FromBytes(reader, resolver);
+        Output = new JsonItemStack();
+        Output.FromBytes(reader, resolver);
+
+        Pattern = new string[reader.ReadInt32()][];
+        for (int i = 0; i < Pattern.Length; i++)
+        {
+            Pattern[i] = new string[reader.ReadInt32()];
+            for (int j = 0; j < Pattern[i].Length; j++) Pattern[i][j] = reader.ReadString();
+        }
+
+        ParsePattern();
+    }
 
     /// <summary>
     /// Resolves the recipe's item stacks. Must be called once blocks and items are registered (AssetsFinalize or later).

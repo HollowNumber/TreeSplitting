@@ -43,7 +43,7 @@ public class BEChoppingBlock : BlockEntity
 
         if (SelectedRecipeCode != null)
         {
-            SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
+            SelectedRecipe = FindRecipe(api, SelectedRecipeCode);
 
             // Re-Generate Target Voxels for Visuals
             if (SelectedRecipe != null)
@@ -62,6 +62,11 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
+
+    private static HewingRecipe? FindRecipe(ICoreAPI api, AssetLocation code)
+    {
+        return TreeSplittingModSystem.GetRecipes(api).FirstOrDefault(x => x.Code.Equals(code));
+    }
 
     public override void ToTreeAttributes(ITreeAttribute tree)
     {
@@ -108,12 +113,20 @@ public class BEChoppingBlock : BlockEntity
             if (code != null)
             {
                 SelectedRecipeCode = new AssetLocation(code);
-                SelectedRecipe =
-                    TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
 
-                Api.Logger.Debug($"Resolved Recipe {SelectedRecipeCode} for Chopping Block at {Pos}");
-
-                if (SelectedRecipe != null) GenerateTargetVoxels();
+                // Api is still null when loading from disk (FromTreeAttributes runs before Initialize);
+                // Initialize() resolves the recipe in that case.
+                if (Api != null)
+                {
+                    SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
+                    if (SelectedRecipe != null) GenerateTargetVoxels();
+                }
+            }
+            else
+            {
+                SelectedRecipeCode = null;
+                SelectedRecipe = null;
+                TargetVoxels = null;
             }
         }
         else
@@ -130,7 +143,7 @@ public class BEChoppingBlock : BlockEntity
     public void SetSelectedRecipe(AssetLocation code)
     {
         SelectedRecipeCode = code;
-        SelectedRecipe = TreeSplittingModSystem.Recipes.FirstOrDefault(x => x.Code.Equals(SelectedRecipeCode));
+        SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
         if (SelectedRecipe != null)
         {
             GenerateTargetVoxels();
@@ -218,7 +231,7 @@ public class BEChoppingBlock : BlockEntity
         var matching = new List<HewingRecipe>();
         var stacks = new List<ItemStack>();
 
-        foreach (var recipe in TreeSplittingModSystem.Recipes)
+        foreach (var recipe in TreeSplittingModSystem.GetRecipes(Api))
         {
             if (recipe.Matches(Api.World, WorkItemStack))
             {
@@ -261,10 +274,9 @@ public class BEChoppingBlock : BlockEntity
     {
         if (WorkItemStack == null) return;
 
-        ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
-
-        string heldItem = heldStack?.Item.Code.ToString();
-
+        // Use the tool type rather than the item code, so e.g. a pickaxe doesn't count as an axe.
+        EnumTool? tool = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible?.Tool;
+        if (tool is not (EnumTool.Axe or EnumTool.Saw or EnumTool.Chisel or EnumTool.Knife)) return;
 
         if (voxelPos.X < 0 || voxelPos.X >= 16 ||
             voxelPos.Y < 0 || voxelPos.Y >= 16 ||
@@ -272,12 +284,22 @@ public class BEChoppingBlock : BlockEntity
 
         if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] == (byte)EnumWoodMaterial.Empty) return;
 
-        Api.Logger.Debug($"OnUseOver: {voxelPos}, {facing}, {toolMode}, {heldItem}");
+        Api.Logger.Debug($"OnUseOver: {voxelPos}, {facing}, {toolMode}, {tool}");
 
-        if (heldItem.Contains("axe")) OnChop(voxelPos, facing, byPlayer, toolMode);
-        if (heldItem.Contains("saw")) OnSaw(voxelPos, facing, byPlayer, toolMode);
-        // Once durability handling is in place the knife should take more durability damage than the chisel
-        if (heldItem.Contains("chisel") || heldItem.Contains("knife")) OnChiselOrKnife(voxelPos, facing, byPlayer);
+        switch (tool)
+        {
+            case EnumTool.Axe:
+                OnChop(voxelPos, facing, byPlayer, toolMode);
+                break;
+            case EnumTool.Saw:
+                OnSaw(voxelPos, facing, byPlayer, toolMode);
+                break;
+            // Once durability handling is in place the knife should take more durability damage than the chisel
+            case EnumTool.Chisel:
+            case EnumTool.Knife:
+                OnChiselOrKnife(voxelPos, facing, byPlayer);
+                break;
+        }
 
         CheckIfFinished(byPlayer);
         RegenSelectionBoxes();
@@ -358,7 +380,7 @@ public class BEChoppingBlock : BlockEntity
         if (heldStack == null) return false;
 
         // Do we have ANY matches?
-        if (!TreeSplittingModSystem.Recipes.Any(r => r.Matches(Api.World, heldStack))) return false;
+        if (!TreeSplittingModSystem.GetRecipes(Api).Any(r => r.Matches(Api.World, heldStack))) return false;
 
         WorkItemStack = heldStack.Clone();
         WorkItemStack.StackSize = 1;
@@ -617,9 +639,22 @@ public class BEChoppingBlock : BlockEntity
         renderer?.Dispose();
     }
 
+    public override void OnBlockBroken(IPlayer? byPlayer = null)
+    {
+        base.OnBlockBroken(byPlayer);
+
+        // Give back the log being worked on instead of silently deleting it.
+        if (Api.Side == EnumAppSide.Server && WorkItemStack != null)
+        {
+            Api.World.SpawnItemEntity(WorkItemStack.Clone(), Pos.ToVec3d().Add(0.5, 0.5, 0.5));
+            WorkItemStack = null;
+        }
+    }
+
     public override void OnBlockUnloaded()
     {
         base.OnBlockUnloaded();
         renderer?.Dispose();
+        dialog?.TryClose();
     }
 }

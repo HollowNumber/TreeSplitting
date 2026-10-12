@@ -19,16 +19,18 @@ public abstract class GenericRecipe
     protected virtual char EmptyChar => '_';
 
     /// <summary>
-    /// Resolves the recipe - parses pattern and resolves item stacks.
+    /// Resolves the recipe's item stacks. Must be called once blocks and items are registered (AssetsFinalize or later).
+    /// Wildcard and templated codes can't be resolved to a single stack, so they are matched/built at runtime instead.
     /// </summary>
     public virtual void Resolve(IWorldAccessor world)
     {
-        // Resolve items
-        Ingredient.Resolve(world, GetIngredientName());
-        Output.Resolve(world, GetOutputName());
+        if (!IsPatternCode(Ingredient.Code)) Ingredient.Resolve(world, GetIngredientName());
+        if (!IsPatternCode(Output.Code)) Output.Resolve(world, GetOutputName());
+    }
 
-        // Parse pattern into voxels
-        ParsePattern();
+    private static bool IsPatternCode(AssetLocation code)
+    {
+        return code.Path.Contains('*') || code.Path.Contains('{');
     }
 
     /// <summary>
@@ -36,21 +38,16 @@ public abstract class GenericRecipe
     /// </summary>
     public virtual bool Matches(IWorldAccessor worldAccessor, ItemStack inputStack)
     {
-        if (inputStack == null) return false;
-
-        // Try resolved itemstack first
-        if (Ingredient.ResolvedItemstack != null)
-        {
-            if (Ingredient.Matches(worldAccessor, inputStack)) return true;
-        }
+        if (inputStack?.Collectible?.Code == null) return false;
 
         // Handle wildcards
-        if (Ingredient.Code.Path.Contains("*"))
+        if (Ingredient.Code.Path.Contains('*'))
         {
             return WildcardUtil.Match(Ingredient.Code, inputStack.Collectible.Code);
         }
 
-        return false;
+        // Exact code. Compared directly so matching doesn't depend on Resolve() having run on this side.
+        return Ingredient.Code.Equals(inputStack.Collectible.Code);
     }
 
     /// <summary>
@@ -136,10 +133,7 @@ public abstract class GenericRecipe
             return null;
         }
 
-        int quantity = 1; 
-        
-        if (Output.Quantity != null) quantity = Output.Quantity;
-
+        int quantity = Math.Max(1, Output.StackSize);
 
         var block = world.GetBlock(finalLoc);
         if (block?.Code != null) return new ItemStack(block, quantity);
@@ -151,7 +145,7 @@ public abstract class GenericRecipe
         return null;
     }
 
-    protected void ParsePattern()
+    public void ParsePattern()
     {
         if (Pattern == null) return;
 

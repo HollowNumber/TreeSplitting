@@ -64,6 +64,10 @@ public class ClientNetworkHandler
 
         if (be is null) return;
 
+        // While a log is being worked, a swing that misses the voxels must not fall through to vanilla
+        // block breaking, which would destroy the chopping block.
+        if (be.WorkItemStack != null) e.Handled = true;
+
         if (sel.SelectionBoxIndex <= 0 || sel.SelectionBoxIndex >= be.SelectionBoxes.Length) return;
         e.Handled = true;
 

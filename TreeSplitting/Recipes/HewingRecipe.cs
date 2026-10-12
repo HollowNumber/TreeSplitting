@@ -34,7 +34,8 @@ public class HewingRecipe : GenericRecipe
         var parts = inputCode.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
         var ignore = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "log", "placed", "planted", "ud", "ld", "u", "d", "placedlog", "debarkedlog"
+            "log", "placed", "planted", "grown", "resin", "resinharvested",
+            "ud", "ns", "we", "ld", "u", "d", "placedlog", "debarkedlog"
         };
 
         foreach (var p in parts)

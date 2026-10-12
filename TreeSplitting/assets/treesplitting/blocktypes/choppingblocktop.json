@@ -15,7 +15,7 @@
   "sideopaque": { "all": false },
   "replaceable": 5000,
   "lightAbsorption": 0,
-  "resistance": 0.1,
+  "resistance": 2,
   "textures": {
     "all": {
       "base": "treesplitting:empty"

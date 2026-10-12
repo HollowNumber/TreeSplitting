@@ -38,6 +38,7 @@ public class ServerNetworkHandler
         BEChoppingBlock be = fromPlayer.Entity.World.BlockAccessor.GetBlockEntity<BEChoppingBlock>(packet.Pos);
 
         if (be is null) return;
+        if (packet.FaceIndex < 0 || packet.FaceIndex >= BlockFacing.ALLFACES.Length) return;
 
         be.OnUseOver(fromPlayer, new Vec3i(packet.VoxelX, packet.VoxelY, packet.VoxelZ),
             BlockFacing.ALLFACES[packet.FaceIndex], packet.ToolMode);

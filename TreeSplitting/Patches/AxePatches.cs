@@ -1,3 +1,4 @@
+using TreeSplitting.BlockEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,9 +48,8 @@ public class AxePatches
         if (!(__instance is ItemAxe)) return;
         if (blockSel == null) return;
 
-        Block block = forPlayer.Entity.World.BlockAccessor.GetBlock(blockSel.Position);
-        // Allow both Base and Top blocks
-        if (block is not (BlockChoppingBlock or BlockChoppingBlockTop)) return;
+        // The stump or the space above it
+        if (BEChoppingBlock.AtPosition(forPlayer.Entity.World.BlockAccessor, blockSel.Position) == null) return;
 
         if (CustomModes == null) return;
 

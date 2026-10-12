@@ -33,10 +33,8 @@ public class ClientNetworkHandler
         BlockSelection sel = _capi.World.Player.CurrentBlockSelection;
         if (sel is null) return;
 
-        Block block = _capi.World.BlockAccessor.GetBlock(sel.Position);
-
-        if (block is not (BlockChoppingBlockTop or BlockChoppingBlock))
-            return;
+        BEChoppingBlock? be = BEChoppingBlock.AtPosition(_capi.World.BlockAccessor, sel.Position);
+        if (be is null) return;
 
         ItemSlot activeSlot = _capi.World.Player.InventoryManager.ActiveHotbarSlot;
         ItemStack heldItemStack = activeSlot.Itemstack;
@@ -56,13 +54,7 @@ public class ClientNetworkHandler
            
         }
         
-        BlockPos pos = sel.Position;
-
-        if (block is BlockChoppingBlockTop) pos = pos.DownCopy();
-
-        BEChoppingBlock be = _capi.World.BlockAccessor.GetBlockEntity<BEChoppingBlock>(pos);
-
-        if (be is null) return;
+        BlockPos pos = be.Pos;
 
         // While a log is being worked, a swing that misses the voxels must not fall through to vanilla
         // block breaking, which would destroy the chopping block.

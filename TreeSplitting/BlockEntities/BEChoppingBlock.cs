@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TreeSplitting.Blocks;
 using TreeSplitting.Gui;
 using TreeSplitting.Network;
 using TreeSplitting.Recipes;
@@ -64,6 +65,48 @@ public class BEChoppingBlock : BlockEntity
 
         // Both sides need the boxes: the server uses the collision boxes for physics.
         RegenSelectionBoxes();
+
+        if (api.Side == EnumAppSide.Server) ConvertLegacyTopBlock();
+    }
+
+    public static readonly AssetLocation ProxyBlockCode = new("game:multiblock-monolithic-0-p1-0");
+
+    /// <summary>
+    /// Finds the chopping block for a selected block position: the stump itself, the multiblock proxy above it,
+    /// or a not yet converted legacy top block. Null if the position isn't part of a chopping block.
+    /// </summary>
+    public static BEChoppingBlock? AtPosition(IBlockAccessor blockAccessor, BlockPos pos)
+    {
+        Block block = blockAccessor.GetBlock(pos);
+        BlockPos stumpPos = block switch
+        {
+            BlockChoppingBlockTop => pos.DownCopy(),
+            IMultiblockOffset proxy => proxy.GetControlBlockPos(pos),
+            _ => pos
+        };
+        return blockAccessor.GetBlockEntity(stumpPos) as BEChoppingBlock;
+    }
+
+    /// <summary>
+    /// Chopping blocks placed before the switch to the vanilla Multiblock behavior have our own
+    /// treesplitting:choppingblocktop above them. Swap it for the vanilla proxy block.
+    /// </summary>
+    private void ConvertLegacyTopBlock()
+    {
+        BlockPos upPos = Pos.UpCopy();
+        if (Api.World.BlockAccessor.GetBlock(upPos) is not BlockChoppingBlockTop) return;
+
+        Block? proxy = Api.World.GetBlock(ProxyBlockCode);
+        if (proxy == null) return;
+
+        // Not while the chunk is still loading; do it on the next tick
+        Api.World.RegisterCallback(_ =>
+        {
+            if (Api.World.BlockAccessor.GetBlock(upPos) is BlockChoppingBlockTop)
+            {
+                Api.World.BlockAccessor.SetBlock(proxy.Id, upPos);
+            }
+        }, 1);
     }
 
 

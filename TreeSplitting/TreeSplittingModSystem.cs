@@ -2,6 +2,7 @@
 using System.Linq;
 using HarmonyLib;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Config;
 using TreeSplitting.Blocks;
 using TreeSplitting.Handlers;
 using TreeSplitting.Item;
@@ -12,13 +13,17 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
 // TODO: Add localisation with the en.json file.
-// TODO: Add WorldInteractions to the ChoppingBlock.
 
 namespace TreeSplitting;
 
 public class TreeSplittingModSystem : ModSystem
 {
-    //public static TreeSplittingConfig Config;
+    public TreeSplittingConfig Config { get; private set; } = new();
+
+    public static TreeSplittingConfig GetConfig(ICoreAPI api)
+    {
+        return api.ModLoader.GetModSystem<TreeSplittingModSystem>()?.Config ?? new TreeSplittingConfig();
+    }
 
     /// <summary>
     /// The server loads these, the recipe registry sends them to clients since they never load the recipes folder.
@@ -41,6 +46,8 @@ public class TreeSplittingModSystem : ModSystem
         base.Start(api);
         this.api = api;
 
+        LoadConfig(api);
+
         api.Network.RegisterChannel("treesplitting").RegisterMessageType<ToolActionPacket>()
             .RegisterMessageType<RecipeSelectPacket>();
 
@@ -62,6 +69,22 @@ public class TreeSplittingModSystem : ModSystem
 
         api.RegisterItemClass(modid + ".itemsaw", typeof(ItemSaw));
 
+    }
+
+    private void LoadConfig(ICoreAPI api)
+    {
+        try
+        {
+            Config = api.LoadModConfig<TreeSplittingConfig>(TreeSplittingConfig.FileName) ?? new TreeSplittingConfig();
+        }
+        catch (System.Exception e)
+        {
+            api.Logger.Error("Couldn't read {0}, using the defaults: {1}", TreeSplittingConfig.FileName, e.Message);
+            Config = new TreeSplittingConfig();
+        }
+
+        // Write it back so new settings show up in the file
+        api.StoreModConfig(Config, TreeSplittingConfig.FileName);
     }
 
     // Can't read assets in Start(), they might not be there yet

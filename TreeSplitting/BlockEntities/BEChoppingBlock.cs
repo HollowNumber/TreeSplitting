@@ -10,6 +10,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using TreeSplitting.Config;
 using TreeSplitting.Enums;
 
 namespace TreeSplitting.BlockEntities;
@@ -29,6 +30,8 @@ public class BEChoppingBlock : BlockEntity
     public bool[,,]? TargetVoxels => SelectedRecipe?.Voxels;
 
     public ItemStack? WorkItemStack;
+    // Log lying on its side with the grain running along X, for recipes that need it
+    public bool Horizontal;
     public AssetLocation? SelectedRecipeCode;
     public HewingRecipe? SelectedRecipe; // Runtime only
 
@@ -42,9 +45,13 @@ public class BEChoppingBlock : BlockEntity
     WoodWorkItemRenderer? renderer;
     GuiDialogRecipeSelector? dialog;
 
-    // Which columns are inside the round log, and which of those are bark. Same for every log so only work it out once
+    // Which spots in the log's cross section are wood, and which of those are bark. Same for every log so only work it out once
+    // Standing up that's (x, z), lying down it's (y, z)
     private static readonly bool[,] InsideLog = new bool[16, 16];
     private static readonly bool[,] IsBark = new bool[16, 16];
+
+    private bool IsInLog(int x, int y, int z) => Horizontal ? InsideLog[y, z] : InsideLog[x, z];
+    private bool IsBarkAt(int x, int y, int z) => Horizontal ? IsBark[y, z] : IsBark[x, z];
 
     static BEChoppingBlock()
     {
@@ -123,6 +130,7 @@ public class BEChoppingBlock : BlockEntity
     {
         base.ToTreeAttributes(tree);
         tree.SetItemstack("workItem", WorkItemStack);
+        tree.SetBool("horizontal", Horizontal);
 
         // byte[,,] is laid out x, y, z in memory, so we can just copy it straight into a flat array
         byte[] flatVoxels = new byte[16 * 16 * 16];
@@ -136,6 +144,7 @@ public class BEChoppingBlock : BlockEntity
     {
         base.FromTreeAttributes(tree, worldAccessForResolve);
         WorkItemStack = tree.GetItemstack("workItem");
+        Horizontal = tree.GetBool("horizontal");
 
         if (WorkItemStack != null)
         {
@@ -179,6 +188,13 @@ public class BEChoppingBlock : BlockEntity
         SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
         if (SelectedRecipe != null)
         {
+            // You pick the recipe before cutting, so just lay the log down (or stand it back up) to match
+            if (SelectedRecipe.Horizontal != Horizontal)
+            {
+                Horizontal = SelectedRecipe.Horizontal;
+                GenerateLogVoxels();
+            }
+
             RegenSelectionBoxes();
             MarkDirty();
         }
@@ -390,6 +406,7 @@ public class BEChoppingBlock : BlockEntity
 
         SelectedRecipe = null;
         SelectedRecipeCode = null;
+        Horizontal = false;
 
         GenerateLogVoxels();
 
@@ -419,13 +436,12 @@ public class BEChoppingBlock : BlockEntity
     private void GenerateLogVoxels()
     {
         for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
         {
-            for (int z = 0; z < 16; z++)
-            {
-                byte mat = (byte)EnumWoodMaterial.Empty;
-                if (InsideLog[x, z]) mat = IsBark[x, z] ? (byte)EnumWoodMaterial.Bark : (byte)EnumWoodMaterial.Heartwood;
-                for (int y = 0; y < 16; y++) Voxels[x, y, z] = mat;
-            }
+            byte mat = (byte)EnumWoodMaterial.Empty;
+            if (IsInLog(x, y, z)) mat = IsBarkAt(x, y, z) ? (byte)EnumWoodMaterial.Bark : (byte)EnumWoodMaterial.Heartwood;
+            Voxels[x, y, z] = mat;
         }
     }
 
@@ -454,7 +470,7 @@ public class BEChoppingBlock : BlockEntity
         double dx = player.Entity.Pos.X - (Pos.X + 0.5);
         double dz = player.Entity.Pos.Z - (Pos.Z + 0.5);
 
-        
+
         if (Math.Abs(dx) > Math.Abs(dz))
         {
             // Player E/W, cut along X axis
@@ -478,31 +494,36 @@ public class BEChoppingBlock : BlockEntity
         bool[,,]? target = TargetVoxels;
         if (SelectedRecipe == null || target == null) return;
 
+        TreeSplittingConfig config = TreeSplittingModSystem.GetConfig(Api);
+
         bool ruined = false;
         bool finished = true;
 
         for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
         for (int z = 0; z < 16; z++)
         {
-            bool insideLog = InsideLog[x, z];
-            for (int y = 0; y < 16; y++)
-            {
-                bool recipeNeedsWood = target[x, y, z];
-                bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
+            bool recipeNeedsWood = target[x, y, z];
+            bool hasWood = Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty;
 
-                // Only ruin it if the missing wood was inside the log, the recipe can want wood in the corners
-                if (recipeNeedsWood && !hasWood && insideLog) ruined = true;
+            // Only ruin it if the missing wood was inside the log, the recipe can want wood in the corners
+            if (recipeNeedsWood && !hasWood && IsInLog(x, y, z)) ruined = true;
 
-                // Still wood left that has to go
-                if (!recipeNeedsWood && hasWood) finished = false;
-            }
+            // Still wood left that has to go
+            if (!recipeNeedsWood && hasWood) finished = false;
         }
+
+        // Forgiving mode just ignores mistakes
+        if (config.ForgivingMode) ruined = false;
 
         if (ruined)
         {
             // Drop Firewood? Or just clear?
-            Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), 2),
-                Pos.ToVec3d().Add(0.5, 1, 0.5));
+            if (config.RuinedFirewoodDrop > 0)
+            {
+                Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), config.RuinedFirewoodDrop),
+                    Pos.ToVec3d().Add(0.5, 1, 0.5));
+            }
             Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
             ResetBlock();
             return;
@@ -514,6 +535,7 @@ public class BEChoppingBlock : BlockEntity
             if (WorkItemStack != null)
             {
                 ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
+                if (result != null) result.StackSize = Math.Max(1, (int)Math.Round(result.StackSize * config.OutputMultiplier));
                 //if (!player.InventoryManager.TryGiveItemstack(result))
                 Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
 
@@ -530,6 +552,7 @@ public class BEChoppingBlock : BlockEntity
         SelectedRecipe = null;
         SelectedRecipeCode = null;
         Voxels = new byte[16, 16, 16];
+        Horizontal = false;
         RegenSelectionBoxes();
         MarkDirty();
     }
@@ -539,7 +562,7 @@ public class BEChoppingBlock : BlockEntity
         // Update Renderer
         if (Api?.Side == EnumAppSide.Client && renderer != null)
         {
-            renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels);
+            renderer.RegenMesh(WorkItemStack, Voxels, TargetVoxels, Horizontal);
         }
 
         // The log goes from the stump up into the block above it (layers 0-5 in the stump, 6-15 above).

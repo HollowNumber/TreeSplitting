@@ -36,7 +36,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         api.Event.RegisterRenderer(this, EnumRenderStage.AfterFinalComposition, "treesplitting-workitem");
     }
 
-    public void RegenMesh(ItemStack? workItem, byte[,,] voxels, bool[,,]? targetVoxels = null)
+    public void RegenMesh(ItemStack? workItem, byte[,,] voxels, bool[,,]? targetVoxels = null, bool horizontal = false)
     {
         if (workItem == null)
         {
@@ -72,148 +72,29 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         // Final fallback - use topTex (wood grain) if no side texture found
         if (sideTex == null) sideTex = topTex;
 
+        // Grain runs up (Y) for a standing log, along X for one lying down.
+        // a and b are the axes across the log, the end grain texture is mapped u = a, v = b
+        int grain = horizontal ? 0 : 1;
+        int axisA = horizontal ? 2 : 0;
+        int axisB = horizontal ? 1 : 2;
+
+        int[] voxel = new int[3];
         for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
         {
-            for (int y = 0; y < 16; y++)
+            byte material = voxels[x, y, z];
+            if (material == 0) continue;
+            voxel[0] = x; voxel[1] = y; voxel[2] = z;
+
+            for (int face = 0; face < 6; face++)
             {
-                for (int z = 0; z < 16; z++)
-                {
-                    byte voxelMaterial = voxels[x, y, z];
-                    if (voxelMaterial != 0)
-                    {
-                        float py = y + yStart;
-                        float xMin = x / 16f;
-                        float yMin = py / 16f;
-                        float zMin = z / 16f;
-                        float xMax = (x + 1) / 16f;
-                        float yMax = (py + 1) / 16f;
-                        float zMax = (z + 1) / 16f;
+                int[] dir = FaceDirs[face];
+                int nx = x + dir[0], ny = y + dir[1], nz = z + dir[2];
+                // Only faces that touch air
+                if (nx is >= 0 and < 16 && ny is >= 0 and < 16 && nz is >= 0 and < 16 && voxels[nx, ny, nz] != 0) continue;
 
-                        // Calculate UVs based on voxel position in 16x16 grid for seamless tiling
-                        float uvXMin = x / 16f;
-                        float uvXMax = (x + 1) / 16f;
-                        float uvZMin = z / 16f;
-                        float uvZMax = (z + 1) / 16f;
-                        float uvYMin = y / 16f;
-                        float uvYMax = (y + 1) / 16f;
-
-                        // Bark gets the bark texture on its sides, inner wood gets the rings (see below)
-                        bool isInnerWood = (voxelMaterial != (byte)EnumWoodMaterial.Bark);
-
-                        // Face culling - only render faces exposed to air
-                        // UP face (Y+) - normal pointing up (0, 1, 0)
-                        if (y == 15 || voxels[x, y + 1, z] == 0)
-                        {
-                            AddFace(mesh, topTex,
-                                xMin, yMax, zMin,
-                                xMax, yMax, zMin,
-                                xMax, yMax, zMax,
-                                xMin, yMax, zMax,
-                                uvXMin, uvZMin, uvXMax, uvZMax,
-                                VertexFlags.PackNormal(0, 1, 0));
-                        }
-
-                        // DOWN face (Y-) - normal pointing down (0, -1, 0)
-                        if (y == 0 || voxels[x, y - 1, z] == 0)
-                        {
-                            AddFace(mesh, topTex,
-                                xMin, yMin, zMax,
-                                xMax, yMin, zMax,
-                                xMax, yMin, zMin,
-                                xMin, yMin, zMin,
-                                uvXMin, uvZMin, uvXMax, uvZMax,
-                                VertexFlags.PackNormal(0, -1, 0));
-                        }
-
-                        // Cut sides of the inner wood: take the row of the end grain texture at this face's depth and
-                        // stretch it up the face. Rings show up as stripes that line up with the rings on top, like real wood
-                        // (the end grain is 32px so +0.25/+0.75 of a voxel picks the texel right at the surface)
-                        float ringRowZNorth = (z + 0.25f) / 16f;
-                        float ringRowZSouth = (z + 0.75f) / 16f;
-                        float ringRowXWest = (x + 0.25f) / 16f;
-                        float ringRowXEast = (x + 0.75f) / 16f;
-
-                        // NORTH face (Z-) - normal pointing north (0, 0, -1)
-                        if (z == 0 || voxels[x, y, z - 1] == 0)
-                        {
-                            if (isInnerWood)
-                                AddFaceUv(mesh, topTex,
-                                    xMax, yMin, zMin, uvXMax, ringRowZNorth,
-                                    xMin, yMin, zMin, uvXMin, ringRowZNorth,
-                                    xMin, yMax, zMin, uvXMin, ringRowZNorth,
-                                    xMax, yMax, zMin, uvXMax, ringRowZNorth,
-                                    VertexFlags.PackNormal(0, 0, -1));
-                            else
-                                AddFace(mesh, sideTex,
-                                    xMax, yMin, zMin,
-                                    xMin, yMin, zMin,
-                                    xMin, yMax, zMin,
-                                    xMax, yMax, zMin,
-                                    uvXMin, uvYMin, uvXMax, uvYMax,
-                                    VertexFlags.PackNormal(0, 0, -1));
-                        }
-
-                        // SOUTH face (Z+) - normal pointing south (0, 0, 1)
-                        if (z == 15 || voxels[x, y, z + 1] == 0)
-                        {
-                            if (isInnerWood)
-                                AddFaceUv(mesh, topTex,
-                                    xMin, yMin, zMax, uvXMin, ringRowZSouth,
-                                    xMax, yMin, zMax, uvXMax, ringRowZSouth,
-                                    xMax, yMax, zMax, uvXMax, ringRowZSouth,
-                                    xMin, yMax, zMax, uvXMin, ringRowZSouth,
-                                    VertexFlags.PackNormal(0, 0, 1));
-                            else
-                                AddFace(mesh, sideTex,
-                                    xMin, yMin, zMax,
-                                    xMax, yMin, zMax,
-                                    xMax, yMax, zMax,
-                                    xMin, yMax, zMax,
-                                    uvXMin, uvYMin, uvXMax, uvYMax,
-                                    VertexFlags.PackNormal(0, 0, 1));
-                        }
-
-                        // WEST face (X-) - normal pointing west (-1, 0, 0)
-                        if (x == 0 || voxels[x - 1, y, z] == 0)
-                        {
-                            if (isInnerWood)
-                                AddFaceUv(mesh, topTex,
-                                    xMin, yMin, zMin, ringRowXWest, uvZMin,
-                                    xMin, yMin, zMax, ringRowXWest, uvZMax,
-                                    xMin, yMax, zMax, ringRowXWest, uvZMax,
-                                    xMin, yMax, zMin, ringRowXWest, uvZMin,
-                                    VertexFlags.PackNormal(-1, 0, 0));
-                            else
-                                AddFace(mesh, sideTex,
-                                    xMin, yMin, zMin,
-                                    xMin, yMin, zMax,
-                                    xMin, yMax, zMax,
-                                    xMin, yMax, zMin,
-                                    uvZMin, uvYMin, uvZMax, uvYMax,
-                                    VertexFlags.PackNormal(-1, 0, 0));
-                        }
-
-                        // EAST face (X+) - normal pointing east (1, 0, 0)
-                        if (x == 15 || voxels[x + 1, y, z] == 0)
-                        {
-                            if (isInnerWood)
-                                AddFaceUv(mesh, topTex,
-                                    xMax, yMin, zMax, ringRowXEast, uvZMax,
-                                    xMax, yMin, zMin, ringRowXEast, uvZMin,
-                                    xMax, yMax, zMin, ringRowXEast, uvZMin,
-                                    xMax, yMax, zMax, ringRowXEast, uvZMax,
-                                    VertexFlags.PackNormal(1, 0, 0));
-                            else
-                                AddFace(mesh, sideTex,
-                                    xMax, yMin, zMax,
-                                    xMax, yMin, zMin,
-                                    xMax, yMax, zMin,
-                                    xMax, yMax, zMax,
-                                    uvZMin, uvYMin, uvZMax, uvYMax,
-                                    VertexFlags.PackNormal(1, 0, 0));
-                        }
-                    }
-                }
+                AddVoxelFace(mesh, voxel, face, material == (byte)EnumWoodMaterial.Bark, grain, axisA, axisB, topTex, sideTex, yStart);
             }
         }
 
@@ -222,6 +103,73 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
 
         RegenOutlineMesh(voxels, targetVoxels, yStart);
+    }
+
+    // +X, -X, +Y, -Y, +Z, -Z
+    private static readonly int[][] FaceDirs =
+    [
+        [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]
+    ];
+
+    private readonly float[][] corners = [new float[3], new float[3], new float[3], new float[3]];
+    private readonly float[] cornerU = new float[4];
+    private readonly float[] cornerV = new float[4];
+
+    /// <summary>
+    /// Adds one face of a voxel and picks the texture for it:
+    /// - faces looking down the grain (the log's ends) get the end grain with the rings
+    /// - bark gets the bark texture running along the log
+    /// - cut sides of the inner wood get the row of the end grain at that depth stretched along the grain, so the rings
+    ///   show up as stripes that line up with the rings on the end, like real wood (end grain is 32px, so +0.25/+0.75 of
+    ///   a voxel picks the texel right at the surface)
+    /// </summary>
+    private void AddVoxelFace(MeshData mesh, int[] voxel, int face, bool isBark, int grain, int axisA, int axisB,
+        TextureAtlasPosition endTex, TextureAtlasPosition barkTex, float yStart)
+    {
+        int[] dir = FaceDirs[face];
+        int normal = dir[0] != 0 ? 0 : dir[1] != 0 ? 1 : 2;
+        bool positive = dir[normal] > 0;
+        int t1 = (normal + 1) % 3, t2 = (normal + 2) % 3;
+
+        // Corners in voxel units, (0,0) (1,0) (1,1) (0,1) across the face. Culling is off so winding doesn't matter
+        for (int i = 0; i < 4; i++)
+        {
+            float[] c = corners[i];
+            c[normal] = voxel[normal] + (positive ? 1 : 0);
+            c[t1] = voxel[t1] + (i is 1 or 2 ? 1 : 0);
+            c[t2] = voxel[t2] + (i is 2 or 3 ? 1 : 0);
+        }
+
+        TextureAtlasPosition tex;
+        if (normal == grain)
+        {
+            tex = endTex;
+            for (int i = 0; i < 4; i++) { cornerU[i] = corners[i][axisA] / 16f; cornerV[i] = corners[i][axisB] / 16f; }
+        }
+        else if (isBark)
+        {
+            // Across the log on u, along the grain on v
+            int across = normal == axisA ? axisB : axisA;
+            tex = barkTex;
+            for (int i = 0; i < 4; i++) { cornerU[i] = corners[i][across] / 16f; cornerV[i] = corners[i][grain] / 16f; }
+        }
+        else
+        {
+            tex = endTex;
+            float pinned = (voxel[normal] + (positive ? 0.75f : 0.25f)) / 16f;
+            for (int i = 0; i < 4; i++)
+            {
+                cornerU[i] = normal == axisA ? pinned : corners[i][axisA] / 16f;
+                cornerV[i] = normal == axisB ? pinned : corners[i][axisB] / 16f;
+            }
+        }
+
+        AddFaceUv(mesh, tex,
+            corners[0][0] / 16f, (corners[0][1] + yStart) / 16f, corners[0][2] / 16f, cornerU[0], cornerV[0],
+            corners[1][0] / 16f, (corners[1][1] + yStart) / 16f, corners[1][2] / 16f, cornerU[1], cornerV[1],
+            corners[2][0] / 16f, (corners[2][1] + yStart) / 16f, corners[2][2] / 16f, cornerU[2], cornerV[2],
+            corners[3][0] / 16f, (corners[3][1] + yStart) / 16f, corners[3][2] / 16f, cornerU[3], cornerV[3],
+            VertexFlags.PackNormal(dir[0], dir[1], dir[2]));
     }
 
     /// <summary>
@@ -328,31 +276,9 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Adds a single quad face to the mesh with proper texture coordinates. This shit so messy lol
+    /// One quad, you give the uv (0-1 in the texture) for each corner yourself
     /// </summary>
-    /// <param name="mesh">The mesh to add the face to</param>
-    /// <param name="tex">The texture atlas position</param>
-    /// <param name="x0">Vertex 0 X</param>
-    /// <param name="y0">Vertex 0 Y</param>
-    /// <param name="z0">Vertex 0 Z</param>
-    /// <param name="x1">Vertex 1 X</param>
-    /// <param name="y1">Vertex 1 Y</param>
-    /// <param name="z1">Vertex 1 Z</param>
-    /// <param name="x2">Vertex 2 X</param>
-    /// <param name="y2">Vertex 2 Y</param>
-    /// <param name="z2">Vertex 2 Z</param>
-    /// <param name="x3">Vertex 3 X</param>
-    /// <param name="y3">Vertex 3 Y</param>
-    /// <param name="z3">Vertex 3 Z</param>
-    /// <param name="uvMinX">UV X minimum (normalized 0-1)</param>
-    /// <param name="uvMinY">UV Y minimum (normalized 0-1)</param>
-    /// <param name="uvMaxX">UV X maximum (normalized 0-1)</param>
-    /// <param name="uvMaxY">UV Y maximum (normalized 0-1)</param>
-    /// <param name="normalFlags">Packed normal flags for lighting</param>
-    /// <summary>
-    /// Same as AddFace but you give the uv (0-1 in the texture) for each corner yourself
-    /// </summary>
-    private void AddFaceUv(MeshData mesh, TextureAtlasPosition tex,
+    private static void AddFaceUv(MeshData mesh, TextureAtlasPosition tex,
         float x0, float y0, float z0, float u0, float v0,
         float x1, float y1, float z1, float u1, float v1,
         float x2, float y2, float z2, float u2, float v2,
@@ -373,46 +299,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
             for (int i = 0; i < 4; i++) mesh.Flags[baseIndex + i] = normalFlags;
         }
 
-        mesh.AddIndex(baseIndex + 0);
-        mesh.AddIndex(baseIndex + 1);
-        mesh.AddIndex(baseIndex + 2);
-        mesh.AddIndex(baseIndex + 0);
-        mesh.AddIndex(baseIndex + 2);
-        mesh.AddIndex(baseIndex + 3);
-    }
-
-    private void AddFace(MeshData mesh, TextureAtlasPosition tex,
-        float x0, float y0, float z0,
-        float x1, float y1, float z1,
-        float x2, float y2, float z2,
-        float x3, float y3, float z3,
-        float uvMinX, float uvMinY, float uvMaxX, float uvMaxY,
-        int normalFlags = 0)
-    {
-        int baseIndex = mesh.VerticesCount;
-
-        // Convert normalized UV coordinates (0-1) to texture atlas coordinates
-        float u0 = tex.x1 + uvMinX * (tex.x2 - tex.x1);
-        float u1 = tex.x1 + uvMaxX * (tex.x2 - tex.x1);
-        float v0 = tex.y1 + uvMinY * (tex.y2 - tex.y1);
-        float v1 = tex.y1 + uvMaxY * (tex.y2 - tex.y1);
-
-        // Add 4 vertices for the quad with UV and color
-        mesh.AddVertex(x0, y0, z0, u0, v0, WhiteColor);
-        mesh.AddVertex(x1, y1, z1, u1, v0, WhiteColor);
-        mesh.AddVertex(x2, y2, z2, u1, v1, WhiteColor);
-        mesh.AddVertex(x3, y3, z3, u0, v1, WhiteColor);
-
-        // Set flags for proper lighting (normals)
-        if (mesh.Flags != null && normalFlags != 0)
-        {
-            mesh.Flags[baseIndex] = normalFlags;
-            mesh.Flags[baseIndex + 1] = normalFlags;
-            mesh.Flags[baseIndex + 2] = normalFlags;
-            mesh.Flags[baseIndex + 3] = normalFlags;
-        }
-
-        // Add indices for two triangles (CCW winding)
         mesh.AddIndex(baseIndex + 0);
         mesh.AddIndex(baseIndex + 1);
         mesh.AddIndex(baseIndex + 2);

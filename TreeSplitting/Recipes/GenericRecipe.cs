@@ -15,6 +15,8 @@ public abstract class GenericRecipe : IByteSerializable
     public JsonItemStack Ingredient { get; set; }
     public JsonItemStack Output { get; set; }
     public string[][] Pattern { get; set; }
+    // If true the log gets laid on its side (grain along X) when you pick this recipe
+    public bool Horizontal { get; set; }
     public bool[,,] Voxels { get; protected set; }
 
     // Configurable settings
@@ -28,6 +30,7 @@ public abstract class GenericRecipe : IByteSerializable
         Ingredient.ToBytes(writer);
         Output.ToBytes(writer);
 
+        writer.Write(Horizontal);
         writer.Write(Pattern?.Length ?? 0);
         foreach (string[] layer in Pattern ?? [])
         {
@@ -45,6 +48,7 @@ public abstract class GenericRecipe : IByteSerializable
         Output = new JsonItemStack();
         Output.FromBytes(reader, resolver);
 
+        Horizontal = reader.ReadBoolean();
         Pattern = new string[reader.ReadInt32()][];
         for (int i = 0; i < Pattern.Length; i++)
         {

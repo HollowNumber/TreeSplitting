@@ -16,8 +16,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private BEChoppingBlock be;
     private MeshRef? meshRef;
     private MeshRef? overlayMeshRef;
-    private MeshRef? targetMeshRef;
-    private Vec4f targetColorMul = new Vec4f(1, 1, 1, 1);
     private Matrixf ModelMat = new Matrixf();
     private Vec4f outlineColorMul = new Vec4f(1, 1, 1, 1);
     private readonly Vec3f origin = new Vec3f(0, 0, 0);
@@ -47,8 +45,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
             meshRef = null;
             overlayMeshRef?.Dispose();
             overlayMeshRef = null;
-            targetMeshRef?.Dispose();
-            targetMeshRef = null;
             return;
         }
 
@@ -230,21 +226,16 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Builds the recipe outline in two parts, using the game's colour presets (so colour-blind mode applies):
-    /// - orange: a wireframe cube around every visible voxel that still has to be removed (like vanilla's anvil/clay forming)
-    /// - green: the faces of the finished shape that are still buried under wood, drawn see-through, so you can see
-    ///   where to stop cutting even when everything visible is orange (e.g. debarking).
+    /// Builds the recipe outline the way vanilla's anvil and clay forming do: a wireframe cube around every voxel
+    /// that still has to be removed, coloured with the game's colour presets (so colour-blind mode applies).
+    /// Voxels buried inside the log are skipped since their outline would be hidden anyway.
     /// </summary>
     private void RegenOutlineMesh(byte[,,] voxels, byte[,,]? targetVoxels, float yStart)
     {
         overlayMeshRef?.Dispose();
         overlayMeshRef = null;
-        targetMeshRef?.Dispose();
-        targetMeshRef = null;
 
         if (targetVoxels == null) return;
-
-        RegenTargetMesh(voxels, targetVoxels, yStart);
 
         MeshData outlineMesh = new MeshData(24, 36, false, false, true, false);
         outlineMesh.SetMode(EnumDrawMode.Lines);
@@ -299,79 +290,9 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         }
     }
 
-    private static readonly int[][] FaceDirs =
-    [
-        [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]
-    ];
-
-    private void RegenTargetMesh(byte[,,] voxels, byte[,,] targetVoxels, float yStart)
-    {
-        MeshData targetMesh = new MeshData(24, 36, false, false, true, false);
-        targetMesh.SetMode(EnumDrawMode.Lines);
-
-        int keepCol = api.ColorPreset.GetColor("voxelColorGreen");
-
-        for (int x = 0; x < 16; x++)
-        {
-            for (int y = 0; y < 16; y++)
-            {
-                for (int z = 0; z < 16; z++)
-                {
-                    // Voxel that's part of the finished shape and still there
-                    if (targetVoxels[x, y, z] == 0 || voxels[x, y, z] == 0) continue;
-
-                    foreach (int[] d in FaceDirs)
-                    {
-                        int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-                        if (nx is < 0 or > 15 || ny is < 0 or > 15 || nz is < 0 or > 15) continue;
-
-                        // Only faces still covered by wood that has to go: that's where the cut ends
-                        if (voxels[nx, ny, nz] == 0 || targetVoxels[nx, ny, nz] != 0) continue;
-
-                        AddFaceOutline(targetMesh, x, y + yStart, z, d, keepCol);
-                    }
-                }
-            }
-        }
-
-        if (targetMesh.VerticesCount > 0)
-        {
-            targetMeshRef = api.Render.UploadMesh(targetMesh);
-        }
-    }
-
-    /// <summary>
-    /// Adds the square outline of one voxel face. Positions are in voxels, <paramref name="dir"/> is the face normal.
-    /// </summary>
-    private static void AddFaceOutline(MeshData mesh, float vx, float vy, float vz, int[] dir, int color)
-    {
-        const float s = 1 / 16f;
-        // Plane the face sits on, and the two axes spanning it
-        int axis = dir[0] != 0 ? 0 : dir[1] != 0 ? 1 : 2;
-        int u = (axis + 1) % 3, v = (axis + 2) % 3;
-
-        float[] origin = [vx * s, vy * s, vz * s];
-        if (dir[axis] > 0) origin[axis] += s;
-
-        int start = mesh.VerticesCount;
-        for (int i = 0; i < 4; i++)
-        {
-            float[] p = (float[])origin.Clone();
-            if (i is 1 or 2) p[u] += s;
-            if (i is 2 or 3) p[v] += s;
-            mesh.AddVertexSkipTex(p[0], p[1], p[2], color);
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            mesh.AddIndex(start + i);
-            mesh.AddIndex(start + (i + 1) % 4);
-        }
-    }
-
     private void RenderRecipeOutline()
     {
-        if ((overlayMeshRef == null && targetMeshRef == null) || api.HideGuis) return;
+        if (overlayMeshRef == null || api.HideGuis) return;
 
         // Only show the outline while holding a tool that works the log, like vanilla clay forming does with clay
         EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
@@ -385,11 +306,9 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         // Fade out between 5 and 10 blocks away
         outlineColorMul.A = 1 - GameMath.Clamp((float)Math.Sqrt(plrPos.SquareDistanceTo(pos.X, pos.Y, pos.Z)) / 5 - 1f, 0, 1);
 
-        // The buried target shape is drawn see-through and fainter so it reads as "behind" the wood
-        targetColorMul.A = outlineColorMul.A * 0.6f;
-
         float linewidth = api.Settings.Float["wireframethickness"];
         rpi.LineWidth = linewidth;
+        rpi.GLEnableDepthTest();
         rpi.GlToggleBlend(true);
 
         IShaderProgram prog = rpi.GetEngineShader(EnumShaderProgram.Wireframe);
@@ -398,19 +317,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         prog.UniformMatrix("projectionMatrix", rpi.CurrentProjectionMatrix);
         prog.UniformMatrix("modelViewMatrix", ModelMat.Values);
 
-        if (targetMeshRef != null)
-        {
-            rpi.GLDisableDepthTest();
-            prog.Uniform("colorIn", targetColorMul);
-            rpi.RenderMesh(targetMeshRef);
-        }
-
-        rpi.GLEnableDepthTest();
-        if (overlayMeshRef != null)
-        {
-            prog.Uniform("colorIn", outlineColorMul);
-            rpi.RenderMesh(overlayMeshRef);
-        }
+        prog.Uniform("colorIn", outlineColorMul);
+        rpi.RenderMesh(overlayMeshRef);
         prog.Stop();
 
         if (linewidth != 1.6f) rpi.LineWidth = 1.6f;
@@ -513,6 +421,5 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         api.Event.UnregisterRenderer(this, EnumRenderStage.AfterFinalComposition); 
         meshRef?.Dispose(); 
         overlayMeshRef?.Dispose(); 
-        targetMeshRef?.Dispose(); 
     }
 }

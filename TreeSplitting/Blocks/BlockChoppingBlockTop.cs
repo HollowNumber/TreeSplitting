@@ -29,6 +29,13 @@ public class BlockChoppingBlockTop : Block
         return base.GetCollisionBoxes(blockAccessor, pos);
     }
 
+    // Highlight only the hovered voxel (like the anvil); otherwise the block highlight draws black
+    // over every voxel box and hides the recipe outline
+    public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
+    {
+        return true;
+    }
+
     // Nothing can hang off or rest on the empty space above the stump
     public override bool CanAttachBlockAt(IBlockAccessor blockAccessor, Block block, BlockPos pos, BlockFacing blockFace, Cuboidi? attachmentArea = null)
     {

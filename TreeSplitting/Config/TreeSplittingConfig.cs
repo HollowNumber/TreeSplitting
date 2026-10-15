@@ -28,6 +28,9 @@ public class TreeSplittingConfig
     // Normal axe hits it takes to get through a plane, 1 takes the whole plane every hit. Gets sent to players when they join
     public int HitsPerPlane { get; set; } = 2;
 
+    // Takes out the vanilla grid recipes for planks, firewood, debarked logs and support beams from logs, so the chopping block is the way to make them
+    public bool DisableVanillaLogRecipes { get; set; } = false;
+
     // Heavy hits wear the axe this much more than a normal hit
     public float HeavyHitDurabilityMultiplier { get; set; } = 2f;
 }

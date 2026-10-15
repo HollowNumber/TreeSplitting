@@ -36,7 +36,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         api.Event.RegisterRenderer(this, EnumRenderStage.AfterFinalComposition, "treesplitting-workitem");
     }
 
-    public void RegenMesh(ItemStack? workItem, byte[,,] voxels, bool[,,]? targetVoxels = null, bool horizontal = false)
+    public void RegenMesh(ItemStack? workItem, byte[,,] voxels, bool[,,]? targetVoxels = null, int grainAxis = 1)
     {
         if (workItem == null)
         {
@@ -74,9 +74,9 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         // Grain runs up (Y) for a standing log, along X for one lying down.
         // a and b are the axes across the log, the end grain texture is mapped u = a, v = b
-        int grain = horizontal ? 0 : 1;
-        int axisA = horizontal ? 2 : 0;
-        int axisB = horizontal ? 1 : 2;
+        int grain = grainAxis;
+        int axisA = grainAxis == 0 ? 2 : 0;
+        int axisB = grainAxis == 1 ? 2 : 1;
 
         int[] voxel = new int[3];
         for (int x = 0; x < 16; x++)

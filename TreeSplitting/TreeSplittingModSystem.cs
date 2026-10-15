@@ -49,7 +49,8 @@ public class TreeSplittingModSystem : ModSystem
         LoadConfig(api);
 
         api.Network.RegisterChannel("treesplitting").RegisterMessageType<ToolActionPacket>()
-            .RegisterMessageType<RecipeSelectPacket>();
+            .RegisterMessageType<RecipeSelectPacket>()
+            .RegisterMessageType<ConfigSyncPacket>();
 
         Recipes = api.RegisterRecipeRegistry<RecipeRegistryGeneric<HewingRecipe>>("treesplitting:hewingrecipes").Recipes;
 

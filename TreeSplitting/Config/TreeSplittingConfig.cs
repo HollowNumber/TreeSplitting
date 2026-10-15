@@ -27,4 +27,10 @@ public class TreeSplittingConfig
 
     // How long between swings when holding down attack, in milliseconds (client side)
     public int SwingIntervalMs { get; set; } = 450;
+
+    // Normal axe hits it takes to get through a plane, 1 takes the whole plane every hit. Gets sent to players when they join
+    public int HitsPerPlane { get; set; } = 2;
+
+    // Heavy hits wear the axe this much more than a normal hit
+    public float HeavyHitDurabilityMultiplier { get; set; } = 2f;
 }

@@ -61,6 +61,12 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-saw", MouseButton = EnumMouseButton.Left, Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Saw) },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-carve", MouseButton = EnumMouseButton.Left, Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Knife).Concat(ObjectCacheUtil.GetToolStacks(capi, EnumTool.Chisel)).ToArray() },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-toolmode", HotKeyCode = "toolmodeselect", MouseButton = EnumMouseButton.None },
+                new WorldInteraction
+                {
+                    ActionLangCode = "treesplitting:blockhelp-choppingblock-turn",
+                    MouseButton = EnumMouseButton.Right,
+                    Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Axe).Concat(ObjectCacheUtil.GetToolStacks(capi, EnumTool.Saw)).ToArray()
+                },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
         }

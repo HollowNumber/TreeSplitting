@@ -8,6 +8,7 @@ using TreeSplitting.Blocks;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util; // Required for ObjectCacheUtil
 using Vintagestory.GameContent;
@@ -30,11 +31,14 @@ public class AxePatches
 
         CustomModes = ObjectCacheUtil.GetOrCreate(api, "treesplittingAxeModes", () =>
         {
-            SkillItem[] modes = new SkillItem[2];
+            SkillItem[] modes = new SkillItem[3];
 
             modes[0] = new SkillItem() { Code = new AssetLocation("chopping-down"), Name = "Chop Vertical" }.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpDown(cr, x, y, width, height, rgba, GameMath.PI));
 
             modes[1] = new SkillItem() { Code = new AssetLocation("chopping-sideways"), Name = "Chop Horizontal" }.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
+
+            // Takes three planes in one go, wears the axe a lot more
+            modes[2] = new SkillItem() { Code = new AssetLocation("chopping-heavy"), Name = Lang.Get("treesplitting:toolmode-heavyhit") }.WithIcon(capi, (cr, x, y, w, h, c) => Drawing.DrawSplit(cr, x, y, w, h, c));
 
 
             return modes;

@@ -12,11 +12,21 @@ public class HewingRecipe : GenericRecipe
     // Bits of a log code that aren't the wood type
     private static readonly HashSet<string> IgnoredCodeParts = new(StringComparer.OrdinalIgnoreCase)
     {
-        "log", "placed", "planted", "grown", "resin", "resinharvested",
-        "ud", "ns", "we", "ld", "u", "d", "placedlog", "debarkedlog"
+        "log", "placed", "planted", "grown", "resin", "resinharvested", "logsection",
+        "ud", "ns", "we", "ne", "nw", "se", "sw", "ld", "u", "d", "placedlog", "debarkedlog"
     };
 
     private static readonly Regex LogWoodRegex = new(@"log[-_](.+?)(?:[-_]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public override bool Matches(IWorldAccessor worldAccessor, ItemStack inputStack)
+    {
+        if (!base.Matches(worldAccessor, inputStack)) return false;
+        if (AllowedWoods.Length == 0 && SkipWoods.Length == 0) return true;
+
+        string? wood = ExtractWoodName(inputStack.Collectible.Code.Path);
+        if (AllowedWoods.Length > 0 && !AllowedWoods.Contains(wood)) return false;
+        return !SkipWoods.Contains(wood);
+    }
 
     protected override string TransformOutputCode(string outputTemplate, string inputCode, IWorldAccessor world)
     {

@@ -17,6 +17,9 @@ public abstract class GenericRecipe : IByteSerializable
     public string[][] Pattern { get; set; }
     // If true the log gets laid on its side (grain along X) when you pick this recipe
     public bool Horizontal { get; set; }
+    // Only these woods, or every wood except these, empty means any
+    public string[] AllowedWoods { get; set; } = [];
+    public string[] SkipWoods { get; set; } = [];
     public bool[,,] Voxels { get; protected set; }
 
     // Configurable settings
@@ -31,6 +34,8 @@ public abstract class GenericRecipe : IByteSerializable
         Output.ToBytes(writer);
 
         writer.Write(Horizontal);
+        writer.Write(string.Join(",", AllowedWoods));
+        writer.Write(string.Join(",", SkipWoods));
         writer.Write(Pattern?.Length ?? 0);
         foreach (string[] layer in Pattern ?? [])
         {
@@ -49,6 +54,8 @@ public abstract class GenericRecipe : IByteSerializable
         Output.FromBytes(reader, resolver);
 
         Horizontal = reader.ReadBoolean();
+        AllowedWoods = reader.ReadString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+        SkipWoods = reader.ReadString().Split(',', StringSplitOptions.RemoveEmptyEntries);
         Pattern = new string[reader.ReadInt32()][];
         for (int i = 0; i < Pattern.Length; i++)
         {

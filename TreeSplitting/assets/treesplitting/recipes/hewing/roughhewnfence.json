@@ -1,0 +1,46 @@
+{
+  "code": "hewing-roughhewnfence",
+  "ingredient": {
+    "type": "block",
+    "code": "game:@(log|logsection)-placed-.*-ud",
+    "name": "wood"
+  },
+  "output": {
+    "type": "block",
+    "code": "game:roughhewnfence-{wood}-ew-free",
+    "stackSize": 8
+  },
+  "allowedWoods": [
+    "birch",
+    "oak",
+    "maple",
+    "pine",
+    "acacia",
+    "kapok",
+    "aged",
+    "baldcypress",
+    "larch",
+    "redwood",
+    "walnut"
+  ],
+  "pattern": [
+    [
+      "________________",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "______####______",
+      "________________"
+    ]
+  ]
+}

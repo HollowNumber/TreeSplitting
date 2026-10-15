@@ -1,3 +1,4 @@
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
@@ -10,13 +11,13 @@ namespace TreeSplitting.Logic;
 /// </summary>
 public static class ChopSounds
 {
-    public record Layer(AssetLocation Location, float Pitch, float Volume);
+    // Jitter off for sounds that already vary, pitching those around just makes them sound warbly
+    public record Layer(AssetLocation Location, float Pitch, float Volume, bool Jitter = true);
 
     private static readonly AssetLocation Chop1 = new("game:sounds/block/chop1");
     private static readonly AssetLocation Chop2 = new("game:sounds/block/chop2");
     private static readonly AssetLocation Chop3 = new("game:sounds/block/chop3");
     private static readonly AssetLocation StickBreak = new("game:sounds/block/stickbreak");
-    private static readonly AssetLocation WoodTool = new("game:sounds/block/wood-tool");
     private static readonly AssetLocation StickHit = new("game:sounds/block/stickhit");
     private static readonly AssetLocation Planks = new("game:sounds/block/planks");
 
@@ -41,17 +42,11 @@ public static class ChopSounds
         new(StickBreak, 0.75f, 0.45f)
     ];
 
-    // One of the vanilla saw strokes, picked at random
-    private static readonly Layer[][] Saw =
-    [
-        [new(new AssetLocation("game:sounds/tool/groundcrafting/saw1"), 1.0f, 0.8f)],
-        [new(new AssetLocation("game:sounds/tool/groundcrafting/saw2"), 1.0f, 0.8f)],
-        [new(new AssetLocation("game:sounds/tool/groundcrafting/saw3"), 1.0f, 0.8f)],
-        [new(new AssetLocation("game:sounds/tool/groundcrafting/saw4"), 1.0f, 0.8f)]
-    ];
+    // The vanilla saw strokes as they are, one per hit and nothing on top
+    private static readonly Layer[][] Saw = Strokes("game:sounds/tool/groundcrafting/saw", 4, 1.0f, 0.5f);
 
-    // Small and soft, the knife whittles and the chisel taps
-    public static readonly Layer[] Knife = [new(WoodTool, 1.5f, 0.6f)];
+    // The knife scrapes like the hide scraping strokes, the chisel taps
+    private static readonly Layer[][] Knife = Strokes("game:sounds/tool/groundcrafting/hidescrape", 5, 1.1f, 0.6f);
     public static readonly Layer[] Chisel = [new(StickHit, 1.6f, 0.7f)];
 
     // Recipe done: the planks sound with a crack on top
@@ -80,10 +75,14 @@ public static class ChopSounds
     public static Layer[]? ForTool(EnumTool tool, IWorldAccessor world) => tool switch
     {
         EnumTool.Saw => Saw[world.Rand.Next(Saw.Length)],
-        EnumTool.Knife => Knife,
+        EnumTool.Knife => Knife[world.Rand.Next(Knife.Length)],
         EnumTool.Chisel => Chisel,
         _ => null
     };
+
+    // name1 to nameN, each its own single layer
+    private static Layer[][] Strokes(string name, int count, float pitch, float volume) =>
+        Enumerable.Range(1, count).Select(i => new[] { new Layer(new AssetLocation(name + i), pitch, volume, false) }).ToArray();
 
     public static void Play(IWorldAccessor world, BlockPos pos, EnumChopResult result, IPlayer? dualCallByPlayer)
     {
@@ -97,7 +96,7 @@ public static class ChopSounds
         double x = pos.X + 0.5, y = pos.Y + 1, z = pos.Z + 0.5;
         foreach (Layer layer in layers)
         {
-            float jitter = 1f + ((float)world.Rand.NextDouble() * 2f - 1f) * PitchJitter;
+            float jitter = layer.Jitter ? 1f + ((float)world.Rand.NextDouble() * 2f - 1f) * PitchJitter : 1f;
             world.PlaySoundAt(layer.Location, x, y, z, dualCallByPlayer, layer.Pitch * jitter, 32, layer.Volume);
         }
     }

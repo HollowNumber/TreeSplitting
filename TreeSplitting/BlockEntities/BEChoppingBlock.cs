@@ -78,9 +78,14 @@ public class BEChoppingBlock : BlockEntity
     // Standing up that's (x, z), lying down it's (y, z)
     private static readonly bool[,] InsideLog = new bool[16, 16];
     private static readonly bool[,] IsBark = new bool[16, 16];
+    // Lighter ring between the bark and the heartwood
+    private static readonly bool[,] IsSapwood = new bool[16, 16];
+    // How much wood a fresh log has, for working out how much firewood a cut up one is worth
+    private static readonly int FullLogWood;
 
     private bool IsInLog(int x, int y, int z) => GrainAxis switch { 0 => InsideLog[y, z], 2 => InsideLog[x, y], _ => InsideLog[x, z] };
     private bool IsBarkAt(int x, int y, int z) => GrainAxis switch { 0 => IsBark[y, z], 2 => IsBark[x, y], _ => IsBark[x, z] };
+    private bool IsSapwoodAt(int x, int y, int z) => GrainAxis switch { 0 => IsSapwood[y, z], 2 => IsSapwood[x, y], _ => IsSapwood[x, z] };
 
     static BEChoppingBlock()
     {
@@ -90,6 +95,8 @@ public class BEChoppingBlock : BlockEntity
             double dist = Math.Sqrt((x - 7.5) * (x - 7.5) + (z - 7.5) * (z - 7.5));
             InsideLog[x, z] = dist <= 7.5;
             IsBark[x, z] = dist > 6.0 && dist <= 7.5;
+            IsSapwood[x, z] = dist > 4.5 && dist <= 6.0;
+            if (InsideLog[x, z]) FullLogWood += 16;
         }
     }
 
@@ -390,8 +397,10 @@ public class BEChoppingBlock : BlockEntity
                 break;
             // Once durability handling is in place the knife should take more durability damage than the chisel
             case EnumTool.Chisel:
+                HandleOneVoxel(voxelPos);
+                break;
             case EnumTool.Knife:
-                OnChiselOrKnife(voxelPos, facing, byPlayer);
+                OnKnife(voxelPos);
                 break;
         }
 
@@ -412,7 +421,11 @@ public class BEChoppingBlock : BlockEntity
         {
             float durabilityMul = chop == EnumChopResult.Heavy ? TreeSplittingModSystem.GetConfig(Api).HeavyHitDurabilityMultiplier : 1f;
             DamageTool(byPlayer, tool.Value, durabilityMul);
-            if (Api.Side == EnumAppSide.Server) ChopSounds.Play(Api.World, Pos, chop, byPlayer);
+            if (Api.Side == EnumAppSide.Server)
+            {
+                if (tool == EnumTool.Axe) ChopSounds.Play(Api.World, Pos, chop, byPlayer);
+                else ChopSounds.Play(Api.World, Pos, ChopSounds.ForTool(tool.Value, Api.World), byPlayer);
+            }
         }
 
         CheckIfFinished(byPlayer);
@@ -529,9 +542,21 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void OnChiselOrKnife(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    // The knife peels bark off a few voxels at a time, on bare wood it just takes the one voxel like the chisel
+    private void OnKnife(Vec3i voxelPos)
     {
-        HandleOneVoxel(voxelPos);
+        if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] != (byte)EnumWoodMaterial.Bark)
+        {
+            HandleOneVoxel(voxelPos);
+            return;
+        }
+
+        for (int x = Math.Max(0, voxelPos.X - 1); x <= Math.Min(15, voxelPos.X + 1); x++)
+        for (int y = Math.Max(0, voxelPos.Y - 1); y <= Math.Min(15, voxelPos.Y + 1); y++)
+        for (int z = Math.Max(0, voxelPos.Z - 1); z <= Math.Min(15, voxelPos.Z + 1); z++)
+        {
+            if (Voxels[x, y, z] == (byte)EnumWoodMaterial.Bark) Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
+        }
     }
 
     private bool TryPutLog(IPlayer byPlayer)
@@ -565,8 +590,10 @@ public class BEChoppingBlock : BlockEntity
     private bool TryTakeLog(IPlayer byPlayer)
     {
         if (WorkItemStack == null) return false;
-        ItemStack stackToReturn = WorkItemStack.Clone();
-        stackToReturn.StackSize = 1;
+
+        // A cut log isn't a log anymore, so it comes back as firewood for what's left of it
+        ItemStack stackToReturn = HasBeenCut ? LeftoverFirewood() : WorkItemStack.Clone();
+        stackToReturn.StackSize = HasBeenCut ? stackToReturn.StackSize : 1;
         if (!byPlayer.InventoryManager.TryGiveItemstack(stackToReturn))
             Api.World.SpawnItemEntity(stackToReturn, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
         ResetBlock();
@@ -577,6 +604,14 @@ public class BEChoppingBlock : BlockEntity
         return true;
     }
 
+    // A whole log is 4 firewood like in the grid, scaled by how much wood is left. Aged logs give aged firewood
+    private ItemStack LeftoverFirewood()
+    {
+        string code = WorkItemStack?.Collectible.Code.Path.Contains("aged") == true ? "game:agedfirewood" : "game:firewood";
+        int quantity = Math.Max(1, (int)Math.Round(4.0 * CountWood() / FullLogWood));
+        return new ItemStack(Api.World.GetItem(new AssetLocation(code)), quantity);
+    }
+
     private void GenerateLogVoxels()
     {
         for (int x = 0; x < 16; x++)
@@ -584,7 +619,12 @@ public class BEChoppingBlock : BlockEntity
         for (int z = 0; z < 16; z++)
         {
             byte mat = (byte)EnumWoodMaterial.Empty;
-            if (IsInLog(x, y, z)) mat = IsBarkAt(x, y, z) ? (byte)EnumWoodMaterial.Bark : (byte)EnumWoodMaterial.Heartwood;
+            if (IsInLog(x, y, z))
+            {
+                mat = IsBarkAt(x, y, z) ? (byte)EnumWoodMaterial.Bark
+                    : IsSapwoodAt(x, y, z) ? (byte)EnumWoodMaterial.Sapwood
+                    : (byte)EnumWoodMaterial.Heartwood;
+            }
             Voxels[x, y, z] = mat;
         }
     }
@@ -632,12 +672,7 @@ public class BEChoppingBlock : BlockEntity
 
         if (ruined)
         {
-            // Drop Firewood? Or just clear?
-            if (config.RuinedFirewoodDrop > 0)
-            {
-                Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), config.RuinedFirewoodDrop),
-                    Pos.ToVec3d().Add(0.5, 1, 0.5));
-            }
+            Api.World.SpawnItemEntity(LeftoverFirewood(), Pos.ToVec3d().Add(0.5, 1, 0.5));
             Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
             ResetBlock();
             return;
@@ -650,10 +685,13 @@ public class BEChoppingBlock : BlockEntity
             {
                 ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
                 if (result != null) result.StackSize = Math.Max(1, (int)Math.Round(result.StackSize * config.OutputMultiplier));
-                //if (!player.InventoryManager.TryGiveItemstack(result))
-                Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+                if (result != null && !player.InventoryManager.TryGiveItemstack(result))
+                {
+                    Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+                }
 
-                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
+                ChopSounds.Play(Api.World, Pos, ChopSounds.Finish, null);
+                Api.World.SpawnCubeParticles(Pos.ToVec3d().Add(0.5, 1.2, 0.5), WorkItemStack, 0.4f, 40, 0.6f, null, new Vec3f(0, 2, 0));
             }
 
             ResetBlock();

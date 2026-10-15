@@ -12,7 +12,6 @@ public class ClientNetworkHandler
 {
     private readonly ICoreClientAPI _capi;
     private readonly IClientNetworkChannel _channel;
-    private static readonly AssetLocation ChopSound = new("game:sounds/block/chop2");
 
     // Hold to chop, like the anvil. Started by a click on the log, keeps swinging while the button is held
     private bool _holding;
@@ -150,7 +149,7 @@ public class ClientNetworkHandler
         }
         else
         {
-            _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
+            ChopSounds.Play(_capi.World, pos, ChopSounds.ForTool(tool.Value, _capi.World), _capi.World.Player);
         }
 
         _channel.SendPacket(new ToolActionPacket()

@@ -22,9 +22,6 @@ public class TreeSplittingConfig
     // If true, cutting away wood the recipe needs doesn't ruin the log, you just get the recipe once the rest is gone
     public bool ForgivingMode { get; set; } = false;
 
-    // Firewood you get back when you ruin a log
-    public int RuinedFirewoodDrop { get; set; } = 2;
-
     // How long between swings when holding down attack, in milliseconds (client side)
     public int SwingIntervalMs { get; set; } = 450;
 

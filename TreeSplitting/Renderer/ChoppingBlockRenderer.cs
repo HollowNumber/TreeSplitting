@@ -21,6 +21,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private readonly Vec3f origin = new Vec3f(0, 0, 0);
 
     private static readonly int WhiteColor = ColorUtil.ToRgba(255, 255, 255, 255);
+    // Heartwood is a bit darker than the sapwood ring around it
+    private static readonly int HeartwoodColor = ColorUtil.ToRgba(255, 215, 200, 185);
 
     public double RenderOrder => 0.5;
     public int RenderRange => 24;
@@ -94,7 +96,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
                 // Only faces that touch air
                 if (nx is >= 0 and < 16 && ny is >= 0 and < 16 && nz is >= 0 and < 16 && voxels[nx, ny, nz] != 0) continue;
 
-                AddVoxelFace(mesh, voxel, face, material == (byte)EnumWoodMaterial.Bark, grain, axisA, axisB, topTex, sideTex, yStart);
+                AddVoxelFace(mesh, voxel, face, material, grain, axisA, axisB, topTex, sideTex, yStart);
             }
         }
 
@@ -123,9 +125,11 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     ///   show up as stripes that line up with the rings on the end, like real wood (end grain is 32px, so +0.25/+0.75 of
     ///   a voxel picks the texel right at the surface)
     /// </summary>
-    private void AddVoxelFace(MeshData mesh, int[] voxel, int face, bool isBark, int grain, int axisA, int axisB,
+    private void AddVoxelFace(MeshData mesh, int[] voxel, int face, byte material, int grain, int axisA, int axisB,
         TextureAtlasPosition endTex, TextureAtlasPosition barkTex, float yStart)
     {
+        bool isBark = material == (byte)EnumWoodMaterial.Bark;
+        int color = material == (byte)EnumWoodMaterial.Heartwood ? HeartwoodColor : WhiteColor;
         int[] dir = FaceDirs[face];
         int normal = dir[0] != 0 ? 0 : dir[1] != 0 ? 1 : 2;
         bool positive = dir[normal] > 0;
@@ -164,7 +168,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
             }
         }
 
-        AddFaceUv(mesh, tex,
+        AddFaceUv(mesh, tex, color,
             corners[0][0] / 16f, (corners[0][1] + yStart) / 16f, corners[0][2] / 16f, cornerU[0], cornerV[0],
             corners[1][0] / 16f, (corners[1][1] + yStart) / 16f, corners[1][2] / 16f, cornerU[1], cornerV[1],
             corners[2][0] / 16f, (corners[2][1] + yStart) / 16f, corners[2][2] / 16f, cornerU[2], cornerV[2],
@@ -278,7 +282,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     /// <summary>
     /// One quad, you give the uv (0-1 in the texture) for each corner yourself
     /// </summary>
-    private static void AddFaceUv(MeshData mesh, TextureAtlasPosition tex,
+    private static void AddFaceUv(MeshData mesh, TextureAtlasPosition tex, int color,
         float x0, float y0, float z0, float u0, float v0,
         float x1, float y1, float z1, float u1, float v1,
         float x2, float y2, float z2, float u2, float v2,
@@ -289,10 +293,10 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         float w = tex.x2 - tex.x1;
         float h = tex.y2 - tex.y1;
 
-        mesh.AddVertex(x0, y0, z0, tex.x1 + u0 * w, tex.y1 + v0 * h, WhiteColor);
-        mesh.AddVertex(x1, y1, z1, tex.x1 + u1 * w, tex.y1 + v1 * h, WhiteColor);
-        mesh.AddVertex(x2, y2, z2, tex.x1 + u2 * w, tex.y1 + v2 * h, WhiteColor);
-        mesh.AddVertex(x3, y3, z3, tex.x1 + u3 * w, tex.y1 + v3 * h, WhiteColor);
+        mesh.AddVertex(x0, y0, z0, tex.x1 + u0 * w, tex.y1 + v0 * h, color);
+        mesh.AddVertex(x1, y1, z1, tex.x1 + u1 * w, tex.y1 + v1 * h, color);
+        mesh.AddVertex(x2, y2, z2, tex.x1 + u2 * w, tex.y1 + v2 * h, color);
+        mesh.AddVertex(x3, y3, z3, tex.x1 + u3 * w, tex.y1 + v3 * h, color);
 
         if (mesh.Flags != null)
         {

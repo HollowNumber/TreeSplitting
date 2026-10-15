@@ -401,7 +401,7 @@ public class BEChoppingBlock : BlockEntity
                 HandleOneVoxel(voxelPos);
                 break;
             case EnumTool.Knife:
-                OnKnife(voxelPos);
+                OnKnife(voxelPos, facing);
                 break;
         }
 
@@ -543,8 +543,8 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    // The knife peels bark off a few voxels at a time, on bare wood it just takes the one voxel like the chisel
-    private void OnKnife(Vec3i voxelPos)
+    // The knife peels bark off a 3x3 patch on the face it hit, on bare wood it just takes the one voxel like the chisel
+    private void OnKnife(Vec3i voxelPos, BlockFacing facing)
     {
         if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] != (byte)EnumWoodMaterial.Bark)
         {
@@ -552,9 +552,11 @@ public class BEChoppingBlock : BlockEntity
             return;
         }
 
-        for (int x = Math.Max(0, voxelPos.X - 1); x <= Math.Min(15, voxelPos.X + 1); x++)
-        for (int y = Math.Max(0, voxelPos.Y - 1); y <= Math.Min(15, voxelPos.Y + 1); y++)
-        for (int z = Math.Max(0, voxelPos.Z - 1); z <= Math.Min(15, voxelPos.Z + 1); z++)
+        // No spread into the log, only across the face
+        int rx = facing.Axis == EnumAxis.X ? 0 : 1, ry = facing.Axis == EnumAxis.Y ? 0 : 1, rz = facing.Axis == EnumAxis.Z ? 0 : 1;
+        for (int x = Math.Max(0, voxelPos.X - rx); x <= Math.Min(15, voxelPos.X + rx); x++)
+        for (int y = Math.Max(0, voxelPos.Y - ry); y <= Math.Min(15, voxelPos.Y + ry); y++)
+        for (int z = Math.Max(0, voxelPos.Z - rz); z <= Math.Min(15, voxelPos.Z + rz); z++)
         {
             if (Voxels[x, y, z] == (byte)EnumWoodMaterial.Bark) Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
         }
@@ -651,11 +653,11 @@ public class BEChoppingBlock : BlockEntity
         return true;
     }
 
-    // A whole log is 4 firewood like in the grid, scaled by how much wood is left. Aged logs give aged firewood
+    // Ruined logs give half what the grid would for the wood that's left, so mistakes still sting. Aged logs give aged firewood
     private ItemStack LeftoverFirewood()
     {
         string code = WorkItemStack?.Collectible.Code.Path.Contains("aged") == true ? "game:agedfirewood" : "game:firewood";
-        int quantity = Math.Max(1, (int)Math.Round(4.0 * CountWood() / FullLogWood));
+        int quantity = Math.Max(1, (int)(2.0 * CountWood() / FullLogWood));
         return new ItemStack(Api.World.GetItem(new AssetLocation(code)), quantity);
     }
 

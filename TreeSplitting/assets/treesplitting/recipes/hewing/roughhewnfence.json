@@ -8,7 +8,7 @@
   "output": {
     "type": "block",
     "code": "game:roughhewnfence-{wood}-ew-free",
-    "stackSize": 8
+    "stackSize": 4
   },
   "allowedWoods": [
     "birch",

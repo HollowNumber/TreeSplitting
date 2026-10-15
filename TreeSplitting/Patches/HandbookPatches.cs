@@ -68,6 +68,7 @@ public static class HandbookPatches
         AddSlideshow(components, capi, logs, openDetailPageFor);
         components.Add(new ClearFloatTextComponent(capi, TinyPadding));
         components.Add(new RichTextComponent(capi, Lang.Get("treesplitting:handbook-hewing-howto") + "\n", CairoFont.WhiteSmallText()));
+        AddHeavyHitText(components, capi);
         return components;
     }
 
@@ -89,7 +90,15 @@ public static class HandbookPatches
         AddHeading(components, capi, "treesplitting:handbook-hewing-makes");
         components.Add(new RichTextComponent(capi, Lang.Get("treesplitting:handbook-hewing-makes-desc") + "\n", CairoFont.WhiteSmallText()));
         AddSlideshow(components, capi, outputs, openDetailPageFor);
+        AddHeavyHitText(components, capi);
         return components;
+    }
+
+    // What the axe's heavy hit does
+    private static void AddHeavyHitText(List<RichTextComponentBase> components, ICoreClientAPI capi)
+    {
+        components.Add(new ClearFloatTextComponent(capi, TinyPadding));
+        components.Add(new RichTextComponent(capi, Lang.Get("treesplitting:handbook-hewing-heavyhit") + "\n", CairoFont.WhiteSmallText()));
     }
 
     // {wood} turned into a wildcard so we can match output pages against it

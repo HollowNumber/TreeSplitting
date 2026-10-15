@@ -25,6 +25,16 @@ public class ServerNetworkHandler
             .SetMessageHandler<RecipeSelectPacket>(OnServerRecipePacket);
 
         sapi.Event.PlayerDisconnect += player => _lastSwingMs.Remove(player.PlayerUID);
+
+        // The server decides how the axe works, tell every player when they join
+        sapi.Event.PlayerNowPlaying += player =>
+        {
+            var config = TreeSplittingModSystem.GetConfig(sapi);
+            _channel.SendPacket(new ConfigSyncPacket
+            {
+                HitsPerPlane = config.HitsPerPlane
+            }, player);
+        };
     }
 
     private void OnServerRecipePacket(IServerPlayer fromPlayer, RecipeSelectPacket packet)

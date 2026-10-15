@@ -9,10 +9,13 @@
   "blockhelp-choppingblock-carve": "Carve out a voxel",
   "blockhelp-choppingblock-pickrecipe": "Pick what to make",
   "blockhelp-choppingblock-toolmode": "Change how the tool cuts",
+  "blockhelp-choppingblock-turn": "Turn the log",
   "blockhelp-choppingblock-laydown": "Lay the log on its side",
   "blockhelp-choppingblock-standup": "Stand the log back up",
   "handbook-hewing-createdby": "Hewing on a chopping block",
   "handbook-hewing-howto": "Sneak + right click a chopping block with one of these logs, pick the recipe, then cut away the wood marked in orange with an axe, saw, knife or chisel (with a hammer in your offhand).",
+  "handbook-hewing-heavyhit": "The axe's heavy hit takes three layers off in one blow, but wears the axe faster and can easily take wood the recipe needs.",
+  "toolmode-heavyhit": "Heavy Hit",
   "handbook-hewing-makes": "Hewing recipes",
   "handbook-hewing-makes-desc": "Sneak + right click it with a log to start hewing. Everything you can make on it:"
 }

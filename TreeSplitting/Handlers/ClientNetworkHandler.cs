@@ -1,4 +1,6 @@
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Enums;
+using TreeSplitting.Logic;
 using TreeSplitting.Network;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -16,16 +18,26 @@ public class ClientNetworkHandler
     private bool _holding;
     private long _lastSwingMs;
 
+    // Heavy hits swing slower when holding down attack
+    private const float HeavyHitSwingMultiplier = 1.6f;
+
 
     public ClientNetworkHandler(ICoreClientAPI capi)
     {
         _capi = capi;
 
-        _channel = capi.Network.GetChannel("treesplitting");
+        _channel = capi.Network.GetChannel("treesplitting")
+            .SetMessageHandler<ConfigSyncPacket>(OnConfigSync);
 
         capi.Event.MouseDown += OnMouseDown;
         capi.Event.MouseUp += OnMouseUp;
         capi.Event.RegisterGameTickListener(OnTick, 50);
+    }
+
+    // Go by the server's settings, not the ones in this player's own config file
+    private void OnConfigSync(ConfigSyncPacket packet)
+    {
+        TreeSplittingModSystem.GetConfig(_capi).HitsPerPlane = packet.HitsPerPlane;
     }
 
     private void OnMouseDown(MouseEvent e)
@@ -61,7 +73,17 @@ public class ClientNetworkHandler
             return;
         }
 
-        int interval = TreeSplittingModSystem.GetConfig(_capi).SwingIntervalMs;
+        var config = TreeSplittingModSystem.GetConfig(_capi);
+        int interval = config.SwingIntervalMs;
+
+        // Heavy hits swing slower
+        ItemStack? held = _capi.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack;
+        if (held?.Collectible?.Tool == EnumTool.Axe &&
+            held.Attributes.GetInt("toolMode") == (int)EnumAxeToolModes.HeavyHit)
+        {
+            interval = (int)(interval * HeavyHitSwingMultiplier);
+        }
+
         if (_capi.ElapsedMilliseconds - _lastSwingMs < interval) return;
 
         // Keep holding even if you look away for a moment, it just won't swing until you're back on the log
@@ -116,7 +138,20 @@ public class ClientNetworkHandler
         _capi.World.Player.Entity.StartAnimation(anim);
         _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
 
-        _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
+        var config = TreeSplittingModSystem.GetConfig(_capi);
+        if (tool == EnumTool.Axe)
+        {
+            // Run the same cut on a copy so the right sound plays straight away instead of after the server answers.
+            // The server plays it for everyone else
+            var player = _capi.World.Player.Entity.Pos;
+            EnumChopResult chop = AxeCut.Cut((byte[,,])be.Voxels.Clone(), voxel,
+                player.X - (pos.X + 0.5), player.Z - (pos.Z + 0.5), (EnumAxeToolModes)mode, config);
+            ChopSounds.Play(_capi.World, pos, chop, _capi.World.Player);
+        }
+        else
+        {
+            _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
+        }
 
         _channel.SendPacket(new ToolActionPacket()
         {

@@ -184,7 +184,6 @@ public class ClientNetworkHandler
             if (_marks == null)
             {
                 if (!fresh) return SwingResult.Blocked;
-                if (_markA == null) _capi.TriggerIngameError(this, "sawmarks-first", Lang.Get("treesplitting:sawmarks-hint-first"));
                 return SetMark(be, pos, voxel, sel.Face);
             }
         }

@@ -477,6 +477,7 @@ public class BEChoppingBlock : BlockEntity
                 break;
         }
 
+        RemoveLoosePieces();
         int removed = woodBefore - CountWood();
         if (removed > 0) HasBeenCut = true;
 
@@ -525,6 +526,49 @@ public class BEChoppingBlock : BlockEntity
 
         ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
         slot.Itemstack?.Collectible.DamageItem(Api.World, byPlayer.Entity, slot, cost);
+    }
+
+    // Like the anvil, bits that got cut off from the rest fall away. The biggest connected piece is the log, everything else goes
+    private void RemoveLoosePieces()
+    {
+        int[,,] group = new int[16, 16, 16];
+        List<List<Vec3i>> pieces = new();
+        Queue<Vec3i> queue = new();
+
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (Voxels[x, y, z] == (byte)EnumWoodMaterial.Empty || group[x, y, z] != 0) continue;
+
+            List<Vec3i> piece = new();
+            pieces.Add(piece);
+            group[x, y, z] = pieces.Count;
+            queue.Enqueue(new Vec3i(x, y, z));
+
+            while (queue.Count > 0)
+            {
+                Vec3i v = queue.Dequeue();
+                piece.Add(v);
+                foreach (BlockFacing face in BlockFacing.ALLFACES)
+                {
+                    int nx = v.X + face.Normali.X, ny = v.Y + face.Normali.Y, nz = v.Z + face.Normali.Z;
+                    if (nx is < 0 or > 15 || ny is < 0 or > 15 || nz is < 0 or > 15) continue;
+                    if (Voxels[nx, ny, nz] == (byte)EnumWoodMaterial.Empty || group[nx, ny, nz] != 0) continue;
+                    group[nx, ny, nz] = pieces.Count;
+                    queue.Enqueue(new Vec3i(nx, ny, nz));
+                }
+            }
+        }
+
+        if (pieces.Count < 2) return;
+
+        List<Vec3i> main = pieces.MaxBy(p => p.Count)!;
+        foreach (List<Vec3i> piece in pieces)
+        {
+            if (piece == main) continue;
+            foreach (Vec3i v in piece) Voxels[v.X, v.Y, v.Z] = (byte)EnumWoodMaterial.Empty;
+        }
     }
 
     private int CountWood()

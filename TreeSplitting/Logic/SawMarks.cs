@@ -50,42 +50,23 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
     }
 
     /// <summary>
-    /// A saw can't start in the middle of a face, the edge it starts from has to be next to open air: the outside
-    /// of the log or something already cut. On the side that's the top row, on the top face the first mark's row
+    /// A saw can't start in the middle of a face, some of the wood it takes has to sit next to open air across the face:
+    /// the outside of the log, a chiselled hole, an earlier cut. The face itself doesn't count, that's always open
     /// </summary>
     public bool StartsAtOpenEdge(byte[,,] voxels)
     {
-        int across = Normal == 1 ? U : (U == 1 ? V : U);
-        int other = across == U ? V : U;
-
-        int a1 = Math.Min(Get(A, across), Get(B, across)), a2 = Math.Max(Get(A, across), Get(B, across));
-        // The line of cells just past the starting edge, any one of them being air is enough
-        bool LineOpen(int lineAxis, int at, int from, int to)
+        foreach (Vec3i cell in FaceCells())
+        foreach (Vec3i v in Column(cell))
         {
-            if (at is < 0 or > 15) return true;
-            int run = lineAxis == across ? other : across;
-            for (int i = from; i <= to; i++)
+            if (voxels[v.X, v.Y, v.Z] == 0) continue;
+
+            foreach (int axis in new[] { U, V })
+            foreach (int step in new[] { -1, 1 })
             {
-                if (ColumnEmpty(voxels, Make(lineAxis, at, run, i, Normal, Get(A, Normal)))) return true;
+                int[] n = [v.X, v.Y, v.Z];
+                n[axis] += step;
+                if (n[axis] is < 0 or > 15 || voxels[n[0], n[1], n[2]] == 0) return true;
             }
-            return false;
-        }
-
-        if (Normal != 1)
-        {
-            int top = Math.Max(A.Y, B.Y);
-            return LineOpen(1, top + 1, a1, a2);
-        }
-
-        int o1 = Math.Min(Get(A, other), Get(B, other)), o2 = Math.Max(Get(A, other), Get(B, other));
-        int side = Get(A, other) <= Get(B, other) ? o1 - 1 : o2 + 1;
-        if (LineOpen(other, side, a1, a2)) return true;
-
-        // A single row can also start from its end at the first mark
-        if (o1 == o2)
-        {
-            int end = Get(A, across) <= Get(B, across) ? a1 - 1 : a2 + 1;
-            return LineOpen(across, end, o1, o2);
         }
         return false;
     }

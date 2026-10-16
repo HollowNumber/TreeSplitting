@@ -13,7 +13,7 @@ Versions follow [semver](https://semver.org).
 - Chopping blocks get made in the world: sneak + hold right click a standing log with an axe. One for every wood
 - Freeform in the recipe list: carve whatever, turn and tip it any time, and switch to a real recipe later if there's wood for it
 - Taking a cut log off gives a partly hewn log that remembers its shape and recipe, put it back to carry on. They can be put down in the world too, and burn like firewood
-- Half logs: a block for every wood that stacks, can be placed, and goes back on the chopping block to split into firewood
+- Half logs (and debarked half logs from debarked logs): a block for every wood that stacks, can be placed, and goes back on the chopping block to split into firewood
 - Bits cut off from the log fall away like on the anvil. Big ones drop as a partly hewn log, smaller ones as firewood. In freeform the axe splits a log into two half logs and each half into two quarters of firewood
 - New recipes: rough-hewn fence and gate, long bowstave (oak, maple, walnut), plank slabs, plank stairs, half logs, and firewood from half logs
 - Redwood log sections can be hewn, aged logs give aged firewood

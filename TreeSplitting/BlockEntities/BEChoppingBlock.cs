@@ -784,6 +784,14 @@ public class BEChoppingBlock : BlockEntity
     {
         if (WorkItemStack == null) return null;
 
+        // An untouched half log comes back as a half log
+        if (IsHalfLog && CountWood() * 2 == FullLogWood)
+        {
+            ItemStack half = WorkItemStack.Clone();
+            half.StackSize = 1;
+            return half;
+        }
+
         if (HasBeenCut) return ItemHewnLog.Create(Api.World, WorkItemStack, Voxels, Horizontal, Rotation, SelectedRecipeCode);
 
         ItemStack log = WorkItemStack.Clone();
@@ -791,13 +799,11 @@ public class BEChoppingBlock : BlockEntity
         return log;
     }
 
-    // A half log stands on the block as half of a standing log in freeform, ready to be split into quarters
+    // A half log stands on the block as half of a standing log, then it's the recipe list like any log
     private bool TryPutHalfLog(IPlayer byPlayer, ItemStack halfStack)
     {
-        Block? log = Api.World.GetBlock(new AssetLocation("game:log-placed-" + halfStack.Collectible.Variant["wood"] + "-ud"));
-        if (log == null) return false;
-
-        WorkItemStack = new ItemStack(log);
+        WorkItemStack = halfStack.Clone();
+        WorkItemStack.StackSize = 1;
         Horizontal = false;
         Rotation = 0;
         GenerateLogVoxels();
@@ -809,15 +815,19 @@ public class BEChoppingBlock : BlockEntity
         }
         HasBeenCut = true;
         SelectedRecipe = null;
-        SelectedRecipeCode = FreeformCode;
+        SelectedRecipeCode = null;
 
         byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
         byPlayer.InventoryManager.ActiveHotbarSlot.MarkDirty();
 
         RegenSelectionBoxes();
         MarkDirty();
+
+        OpenRecipeDialog(byPlayer);
         return true;
     }
+
+    private bool IsHalfLog => WorkItemStack?.Collectible.Code.Domain == "treesplitting" && WorkItemStack.Collectible.FirstCodePart() == "halflog";
 
     private bool TryTakeLog(IPlayer byPlayer)
     {

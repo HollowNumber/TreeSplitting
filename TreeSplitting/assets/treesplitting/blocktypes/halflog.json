@@ -55,6 +55,9 @@
     },
     "split": {
       "base": "game:block/wood/debarked/{wood}"
+    },
+    "up": {
+      "base": "game:block/wood/treetrunk/{wood}"
     }
   },
   "drops": [
@@ -108,15 +111,15 @@
   "heldTpUseAnimation": "twohandplaceblock",
   "tpHandTransform": {
     "translation": {
-      "x": -1.23,
-      "y": -0.91,
-      "z": -0.8
+      "x": -1.1,
+      "y": -0.6,
+      "z": -0.6
     },
     "rotation": {
-      "x": -2,
-      "y": 25,
-      "z": -78
+      "x": -83,
+      "y": -6,
+      "z": -99
     },
-    "scale": 0.4
+    "scale": 0.5
   }
 }

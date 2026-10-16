@@ -1,0 +1,11 @@
+[
+  {
+    "op": "add",
+    "path": "/behaviorsByType/*/-",
+    "value": {
+      "name": "treesplitting.makechoppingblock"
+    },
+    "file": "game:blocktypes/wood/woodtyped/log.json",
+    "side": "Server"
+  }
+]

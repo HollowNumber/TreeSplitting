@@ -9,7 +9,7 @@
   "output": {
     "type": "block",
     "code": "game:supportbeam-{wood}",
-    "stackSize": 1
+    "stackSize": 4
   },
   "pattern": [
     [

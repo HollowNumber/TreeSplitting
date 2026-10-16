@@ -45,7 +45,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 Itemstacks = GetLogStacks(capi)
             }];
         }
-        else if (be.SelectedRecipe == null)
+        else if (be.SelectedRecipe == null && !be.Freeform)
         {
             interactions =
             [
@@ -65,13 +65,18 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 {
                     ActionLangCode = "treesplitting:blockhelp-choppingblock-turn",
                     MouseButton = EnumMouseButton.Right,
-                    Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Axe).Concat(ObjectCacheUtil.GetToolStacks(capi, EnumTool.Saw)).ToArray()
+                    Itemstacks = TurningTools(capi)
                 },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
         }
 
-        // Tipping the log over works until you start cutting
+        if (be.Freeform)
+        {
+            interactions = interactions.Append(new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-switchrecipe", MouseButton = EnumMouseButton.Right });
+        }
+
+        // Tipping the log over works until the first cut, or any time in freeform
         if (be.CanRotate)
         {
             interactions = interactions.Append(new WorldInteraction
@@ -84,6 +89,9 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
 
         return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
     }
+
+    private static ItemStack[] TurningTools(ICoreClientAPI capi) =>
+        new[] { EnumTool.Axe, EnumTool.Saw, EnumTool.Knife, EnumTool.Chisel }.SelectMany(t => ObjectCacheUtil.GetToolStacks(capi, t)).ToArray();
 
     // Every log that has at least one hewing recipe, worked out once
     private static ItemStack[] GetLogStacks(ICoreClientAPI capi)
@@ -106,7 +114,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
         // Delegate to BE
         if (be.OnInteract(byPlayer, blockSel)) return true;
 
-        // Eat clicks on the top or the log so you can't place blocks on it
+        // Eat clicks on the top or the log so blocks can't be placed on it
         return blockSel.Face == BlockFacing.UP || blockSel.SelectionBoxIndex > 0;
     }
 
@@ -129,7 +137,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     }
 
 
-    // Only highlight the voxel you're looking at like the anvil, otherwise the black outline covers the orange one
+    // Only highlight the voxel being looked at like the anvil, otherwise the black outline covers the orange one
     public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
     {
         return true;
@@ -171,7 +179,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             be.OnInteract(byPlayer, blockSel);
         }
 
-        // Always eat the click so you can't place blocks on the log
+        // Always eat the click so blocks can't be placed on the log
         return true;
     }
 

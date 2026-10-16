@@ -13,7 +13,7 @@ namespace TreeSplitting.Patches;
 
 /// <summary>
 /// Adds hewing to the handbook, like knapping and clay forming have.
-/// Output pages get a "made by hewing" section with the logs that make it, the chopping block page lists everything you can make.
+/// Output pages get a "made by hewing" section with the logs that make it, the chopping block page lists everything that can be made on it.
 /// </summary>
 [HarmonyPatchCategory("treesplitting")]
 public static class HandbookPatches
@@ -72,7 +72,7 @@ public static class HandbookPatches
         return components;
     }
 
-    // Everything you can make on the chopping block, on its own page
+    // Everything that can be made on the chopping block, on its own page
     private static List<RichTextComponentBase>? BuildChoppingBlockSection(ICoreClientAPI capi, List<HewingRecipe> recipes, ItemStack[] allStacks, ActionConsumable<string> openDetailPageFor)
     {
         List<ItemStack> outputs = new();

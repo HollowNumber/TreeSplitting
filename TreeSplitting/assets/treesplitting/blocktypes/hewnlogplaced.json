@@ -1,0 +1,41 @@
+{
+  "code": "hewnlogplaced",
+  "class": "treesplitting.hewnlogplaced",
+  "entityClass": "treesplitting.hewnlogplaced",
+  "attributes": {
+    "handbook": {
+      "exclude": true
+    }
+  },
+  "shape": {
+    "base": "game:block/basic/cube"
+  },
+  "drawtype": "json",
+  "textures": {
+    "all": {
+      "base": "game:block/wood/treetrunk/oak"
+    }
+  },
+  "blockmaterial": "Wood",
+  "replaceable": 100,
+  "resistance": 1.5,
+  "lightAbsorption": 0,
+  "sideopaque": {
+    "all": false
+  },
+  "sidesolid": {
+    "all": false
+  },
+  "sideao": {
+    "all": false
+  },
+  "emitsideao": {
+    "all": false
+  },
+  "sounds": {
+    "place": "game:block/planks",
+    "break": "game:block/planks",
+    "hit": "game:block/planks",
+    "walk": "game:walk/wood"
+  }
+}

@@ -15,8 +15,11 @@ public abstract class GenericRecipe : IByteSerializable
     public JsonItemStack Ingredient { get; set; }
     public JsonItemStack Output { get; set; }
     public string[][] Pattern { get; set; }
-    // If true the log gets laid on its side (grain along X) when you pick this recipe
+    // If true the log has to be lying on its side (grain along X) for this recipe
     public bool Horizontal { get; set; }
+    // Only these woods, or every wood except these, empty means any
+    public string[] AllowedWoods { get; set; } = [];
+    public string[] SkipWoods { get; set; } = [];
     public bool[,,] Voxels { get; protected set; }
 
     // Configurable settings
@@ -31,6 +34,8 @@ public abstract class GenericRecipe : IByteSerializable
         Output.ToBytes(writer);
 
         writer.Write(Horizontal);
+        writer.Write(string.Join(",", AllowedWoods));
+        writer.Write(string.Join(",", SkipWoods));
         writer.Write(Pattern?.Length ?? 0);
         foreach (string[] layer in Pattern ?? [])
         {
@@ -49,6 +54,8 @@ public abstract class GenericRecipe : IByteSerializable
         Output.FromBytes(reader, resolver);
 
         Horizontal = reader.ReadBoolean();
+        AllowedWoods = reader.ReadString().Split(',', StringSplitOptions.RemoveEmptyEntries);
+        SkipWoods = reader.ReadString().Split(',', StringSplitOptions.RemoveEmptyEntries);
         Pattern = new string[reader.ReadInt32()][];
         for (int i = 0; i < Pattern.Length; i++)
         {
@@ -61,7 +68,7 @@ public abstract class GenericRecipe : IByteSerializable
 
     /// <summary>
     /// Resolves the item stacks, blocks and items need to be loaded first (AssetsFinalize).
-    /// Skips wildcard/{wood} codes since those get worked out when you actually use the recipe.
+    /// Skips wildcard/{wood} codes since those get worked out when the recipe actually gets used.
     /// </summary>
     public virtual void Resolve(IWorldAccessor world)
     {

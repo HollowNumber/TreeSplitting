@@ -2,13 +2,13 @@
   "code": "hewing-ladder",
   "ingredient": {
     "type": "block",
-    "code": "game:log-*-ud",
+    "code": "game:@(log|logsection)-placed-.*-ud",
     "name": "wood"
   },
   "output": {
     "type": "block",
     "code": "game:ladder-wood-{wood}-north",
-    "stackSize": 2
+    "stackSize": 4
   },
   "pattern": [
     [

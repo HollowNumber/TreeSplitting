@@ -28,7 +28,7 @@ public class BlockChoppingBlockTop : Block
         return base.GetCollisionBoxes(blockAccessor, pos);
     }
 
-    // Only highlight the voxel you're looking at like the anvil, otherwise the black outline covers the orange one
+    // Only highlight the voxel being looked at like the anvil, otherwise the black outline covers the orange one
     public override bool DoPartialSelection(IWorldAccessor world, BlockPos pos)
     {
         return true;
@@ -61,7 +61,7 @@ public class BlockChoppingBlockTop : Block
         {
             be.OnInteract(byPlayer, blockSel);
 
-            // Always eat the click so you can't place blocks on the log
+            // Always eat the click so blocks can't be placed on the log
             return true;
         }
         return base.OnBlockInteractStart(world, byPlayer, blockSel);

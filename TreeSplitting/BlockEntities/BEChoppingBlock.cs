@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using TreeSplitting.Blocks;
 using TreeSplitting.Gui;
+using TreeSplitting.Item;
 using TreeSplitting.Logic;
 using TreeSplitting.Network;
 using TreeSplitting.Recipes;
 using TreeSplitting.Rendering;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using TreeSplitting.Config;
@@ -59,10 +61,14 @@ public class BEChoppingBlock : BlockEntity
 
     // Which way the grain runs: up for a standing log, along X for a lying one, along Z once that's turned a quarter
     public int GrainAxis => !Horizontal ? 1 : Rotation % 2 == 0 ? 0 : 2;
-    // Once you've cut into it you can't tip it over anymore
+    // Once it's been cut into it can't be tipped over anymore
     public bool HasBeenCut;
     public AssetLocation? SelectedRecipeCode;
     public HewingRecipe? SelectedRecipe; // Runtime only
+
+    // Picked from the recipe list like any other, no target so nothing finishes or ruins. Can be swapped for a real recipe later
+    public static readonly AssetLocation FreeformCode = new("treesplitting:freeform");
+    public bool Freeform => FreeformCode.Equals(SelectedRecipeCode);
 
     // Index 0 is the stump, the rest are voxels. Top* are the same boxes moved down a block for the part above the stump
     public Cuboidf[] SelectionBoxes = [];
@@ -78,9 +84,14 @@ public class BEChoppingBlock : BlockEntity
     // Standing up that's (x, z), lying down it's (y, z)
     private static readonly bool[,] InsideLog = new bool[16, 16];
     private static readonly bool[,] IsBark = new bool[16, 16];
+    // Lighter ring between the bark and the heartwood
+    private static readonly bool[,] IsSapwood = new bool[16, 16];
+    // How much wood a fresh log has, for working out how much firewood a cut up one is worth
+    private static readonly int FullLogWood;
 
     private bool IsInLog(int x, int y, int z) => GrainAxis switch { 0 => InsideLog[y, z], 2 => InsideLog[x, y], _ => InsideLog[x, z] };
     private bool IsBarkAt(int x, int y, int z) => GrainAxis switch { 0 => IsBark[y, z], 2 => IsBark[x, y], _ => IsBark[x, z] };
+    private bool IsSapwoodAt(int x, int y, int z) => GrainAxis switch { 0 => IsSapwood[y, z], 2 => IsSapwood[x, y], _ => IsSapwood[x, z] };
 
     static BEChoppingBlock()
     {
@@ -90,6 +101,8 @@ public class BEChoppingBlock : BlockEntity
             double dist = Math.Sqrt((x - 7.5) * (x - 7.5) + (z - 7.5) * (z - 7.5));
             InsideLog[x, z] = dist <= 7.5;
             IsBark[x, z] = dist > 6.0 && dist <= 7.5;
+            IsSapwood[x, z] = dist > 4.5 && dist <= 6.0;
+            if (InsideLog[x, z]) FullLogWood += 16;
         }
     }
 
@@ -105,7 +118,7 @@ public class BEChoppingBlock : BlockEntity
             renderer = new WoodWorkItemRenderer(this, Pos, capi);
         }
 
-        // Server needs these too, otherwise you fall through the log
+        // Server needs these too, otherwise players fall through the log
         RegenSelectionBoxes();
 
         if (api.Side == EnumAppSide.Server) ConvertLegacyTopBlock();
@@ -215,10 +228,43 @@ public class BEChoppingBlock : BlockEntity
         RegenSelectionBoxes();
     }
 
+    // A cut log can only go for recipes that don't need wood that's already gone
+    private bool HasWoodFor(HewingRecipe recipe)
+    {
+        if (!HasBeenCut || recipe.Voxels == null) return true;
+
+        bool[,,] target = recipe.Voxels;
+        for (int i = 0; i < Rotation; i++) target = RotateCw(target);
+
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (target[x, y, z] && IsInLog(x, y, z) && Voxels[x, y, z] == (byte)EnumWoodMaterial.Empty) return false;
+        }
+        return true;
+    }
+
     public void SetSelectedRecipe(AssetLocation code)
     {
+        if (FreeformCode.Equals(code))
+        {
+            SelectedRecipeCode = FreeformCode;
+            SelectedRecipe = null;
+            RegenSelectionBoxes();
+            MarkDirty();
+            return;
+        }
+
         SelectedRecipeCode = code;
         SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
+        // Same check as the picker, in case it gets asked for one it didn't show
+        if (SelectedRecipe != null && !HasWoodFor(SelectedRecipe))
+        {
+            SelectedRecipe = null;
+            SelectedRecipeCode = null;
+            return;
+        }
         if (SelectedRecipe != null)
         {
             // The picker only shows recipes for how the log sits, this is just in case
@@ -257,15 +303,16 @@ public class BEChoppingBlock : BlockEntity
         return false;
     }
 
-    public bool CanRotate => WorkItemStack != null && !HasBeenCut;
+    // A cut log can only be tipped in freeform, a recipe wouldn't line up anymore
+    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || Freeform || IsUntouchedHalfLog);
 
-    // Turning only makes sense once there's a recipe to line up, and it works any time after that
-    public bool CanTurn => WorkItemStack != null && SelectedRecipe != null;
+    // Before anything's picked a right click opens the picker, tool in hand or not
+    public bool CanTurn => WorkItemStack != null && (SelectedRecipe != null || Freeform);
 
     private static bool IsHoldingTurningTool(IPlayer byPlayer)
     {
         EnumTool? tool = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible?.Tool;
-        return tool is EnumTool.Axe or EnumTool.Saw;
+        return tool is EnumTool.Axe or EnumTool.Saw or EnumTool.Knife or EnumTool.Chisel;
     }
 
     // Right click with a tool turns the log a quarter turn so the player doesn't have to walk around it, like the anvil
@@ -293,16 +340,21 @@ public class BEChoppingBlock : BlockEntity
         return rotated;
     }
 
-    // Ctrl + right click tips the log onto its side or stands it back up, which recipes you get depends on how it sits
+    // Ctrl + right click tips the log onto its side or stands it back up, which recipes show up depends on how it sits
     private bool TryRotateLog(IPlayer byPlayer)
     {
         if (!CanRotate) return false;
 
+        // A cut log keeps its shape and just gets tipped over, a fresh one is made again, a half log lands flat side up
+        bool freshHalf = IsUntouchedHalfLog;
+        if (HasBeenCut && !freshHalf) TipVoxels(!Horizontal);
         Horizontal = !Horizontal;
         Rotation = 0;
         SelectedRecipe = null;
-        SelectedRecipeCode = null;
-        GenerateLogVoxels();
+        // Freeform doesn't care how the log sits so it stays on
+        SelectedRecipeCode = Freeform ? FreeformCode : null;
+        if (freshHalf) GenerateHalfLogVoxels();
+        else if (!HasBeenCut) GenerateLogVoxels();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, byPlayer);
         RegenSelectionBoxes();
@@ -311,10 +363,26 @@ public class BEChoppingBlock : BlockEntity
         if (Api.Side == EnumAppSide.Client)
         {
             dialog?.TryClose();
-            OpenRecipeDialog(byPlayer);
+            if (!HasBeenCut || freshHalf) OpenRecipeDialog(byPlayer);
         }
 
         return true;
+    }
+
+    // Grain up goes to along X when laying it down, and from along X or Z back up when standing it up
+    private void TipVoxels(bool toLying)
+    {
+        byte[,,] tipped = new byte[16, 16, 16];
+        int grain = GrainAxis;
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (toLying) tipped[y, 15 - x, z] = Voxels[x, y, z];
+            else if (grain == 0) tipped[15 - y, x, z] = Voxels[x, y, z];
+            else tipped[x, z, 15 - y] = Voxels[x, y, z];
+        }
+        Voxels = tipped;
     }
 
     private void OpenRecipeDialog(IPlayer player)
@@ -324,10 +392,11 @@ public class BEChoppingBlock : BlockEntity
 
         var matching = new List<HewingRecipe>();
         var stacks = new List<ItemStack>();
+        var names = new List<string>();
 
         foreach (var recipe in TreeSplittingModSystem.GetRecipes(Api))
         {
-            if (recipe.Horizontal == Horizontal && recipe.Matches(Api.World, WorkItemStack))
+            if (recipe.Horizontal == Horizontal && recipe.Matches(Api.World, WorkItemStack) && HasWoodFor(recipe))
             {
                 ItemStack outStack = recipe.GenerateOutput(WorkItemStack, Api.World);
 
@@ -339,23 +408,38 @@ public class BEChoppingBlock : BlockEntity
             }
         }
 
-        if (matching.Count == 0) return;
+        // Freeform always fits, last in the list
+        if (!Freeform)
+        {
+            // The log as it sits right now, carving it as is
+            ItemStack icon = ItemHewnLog.Create(Api.World, WorkItemStack, Voxels, Horizontal, Rotation, null);
+            names.AddRange(stacks.Select(s => s.GetName()));
+            stacks.Add(icon);
+            names.Add(Lang.Get("treesplitting:recipe-freeform"));
+        }
+        else names.AddRange(stacks.Select(s => s.GetName()));
+
+        if (stacks.Count == 0)
+        {
+            capi.TriggerIngameError(this, "nowoodleft", Lang.Get("treesplitting:ingameerror-hewnlog-nowood"));
+            return;
+        }
 
         if (dialog?.IsOpened() == true) dialog.TryClose();
 
         dialog = new GuiDialogRecipeSelector(capi, stacks,
             (selectedIndex) =>
             {
-                if (selectedIndex >= 0 && selectedIndex < matching.Count)
+                if (selectedIndex >= 0 && selectedIndex < stacks.Count)
                 {
-                    var recipe = matching[selectedIndex];
+                    AssetLocation code = selectedIndex < matching.Count ? matching[selectedIndex].Code : FreeformCode;
                     capi.Network.GetChannel("treesplitting").SendPacket(new RecipeSelectPacket()
                     {
                         Pos = Pos,
-                        RecipeCode = recipe.Code.ToString()
+                        RecipeCode = code.ToString()
                     });
                 }
-            }
+            }, names: names
         );
         dialog.TryOpen();
     }
@@ -390,11 +474,14 @@ public class BEChoppingBlock : BlockEntity
                 break;
             // Once durability handling is in place the knife should take more durability damage than the chisel
             case EnumTool.Chisel:
+                HandleOneVoxel(voxelPos);
+                break;
             case EnumTool.Knife:
-                OnChiselOrKnife(voxelPos, facing, byPlayer);
+                OnKnife(voxelPos, facing);
                 break;
         }
 
+        bool splitOff = RemoveLoosePieces();
         int removed = woodBefore - CountWood();
         if (removed > 0) HasBeenCut = true;
 
@@ -412,15 +499,42 @@ public class BEChoppingBlock : BlockEntity
         {
             float durabilityMul = chop == EnumChopResult.Heavy ? TreeSplittingModSystem.GetConfig(Api).HeavyHitDurabilityMultiplier : 1f;
             DamageTool(byPlayer, tool.Value, durabilityMul);
-            if (Api.Side == EnumAppSide.Server) ChopSounds.Play(Api.World, Pos, chop, byPlayer);
+            if (Api.Side == EnumAppSide.Server)
+            {
+                if (tool == EnumTool.Axe) ChopSounds.Play(Api.World, Pos, chop, byPlayer);
+                else ChopSounds.Play(Api.World, Pos, ChopSounds.ForTool(tool.Value, Api.World), byPlayer);
+            }
         }
 
         CheckIfFinished(byPlayer);
+        // Only after the axe actually split something off, so a small carving doesn't turn into firewood on the next tap
+        if (Freeform && splitOff && tool == EnumTool.Axe) PopOffRemainder();
         RegenSelectionBoxes();
         MarkDirty();
     }
 
-    // Only wears the tool when you actually cut something
+    // In freeform, once a split leaves half a log or less on the block that comes off too, same as the piece that fell:
+    // a half drops as a partly hewn log, a quarter as firewood. So a log splits into two halves and each half into two quarters
+    private void PopOffRemainder()
+    {
+        int wood = CountWood();
+        if (wood == 0 || wood * 2 > FullLogWood) return;
+
+        if (Api.Side == EnumAppSide.Server)
+        {
+            List<Vec3i> rest = new();
+            for (int x = 0; x < 16; x++)
+            for (int y = 0; y < 16; y++)
+            for (int z = 0; z < 16; z++)
+            {
+                if (Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty) rest.Add(new Vec3i(x, y, z));
+            }
+            DropPiece(rest);
+        }
+        ResetBlock();
+    }
+
+    // Only wears the tool when something actually gets cut
     private void DamageTool(IPlayer byPlayer, EnumTool tool, float multiplier = 1f)
     {
         if (Api.Side != EnumAppSide.Server) return;
@@ -441,6 +555,59 @@ public class BEChoppingBlock : BlockEntity
         slot.Itemstack?.Collectible.DamageItem(Api.World, byPlayer.Entity, slot, cost);
     }
 
+    // Like the anvil, bits that got cut off from the rest fall away. With a recipe anything that still has recipe wood in it stays
+    // (firewood is four separate quarters), in freeform the biggest piece is the log and everything else goes
+    private bool RemoveLoosePieces()
+    {
+        int[,,] group = new int[16, 16, 16];
+        List<List<Vec3i>> pieces = new();
+        Queue<Vec3i> queue = new();
+
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (Voxels[x, y, z] == (byte)EnumWoodMaterial.Empty || group[x, y, z] != 0) continue;
+
+            List<Vec3i> piece = new();
+            pieces.Add(piece);
+            group[x, y, z] = pieces.Count;
+            queue.Enqueue(new Vec3i(x, y, z));
+
+            while (queue.Count > 0)
+            {
+                Vec3i v = queue.Dequeue();
+                piece.Add(v);
+                foreach (BlockFacing face in BlockFacing.ALLFACES)
+                {
+                    int nx = v.X + face.Normali.X, ny = v.Y + face.Normali.Y, nz = v.Z + face.Normali.Z;
+                    if (nx is < 0 or > 15 || ny is < 0 or > 15 || nz is < 0 or > 15) continue;
+                    if (Voxels[nx, ny, nz] == (byte)EnumWoodMaterial.Empty || group[nx, ny, nz] != 0) continue;
+                    group[nx, ny, nz] = pieces.Count;
+                    queue.Enqueue(new Vec3i(nx, ny, nz));
+                }
+            }
+        }
+
+        if (pieces.Count < 2) return false;
+
+        List<Vec3i> main = pieces.MaxBy(p => p.Count)!;
+        bool[,,]? target = TargetVoxels;
+        bool Keep(List<Vec3i> piece) => target == null ? piece == main : piece.Any(v => target[v.X, v.Y, v.Z]);
+        // All waste somehow, keep the biggest so there's still a log
+        bool anyKept = pieces.Any(Keep);
+
+        bool dropped = false;
+        foreach (List<Vec3i> piece in pieces)
+        {
+            if (anyKept ? Keep(piece) : piece == main) continue;
+            if (Api.Side == EnumAppSide.Server) DropPiece(piece);
+            foreach (Vec3i v in piece) Voxels[v.X, v.Y, v.Z] = (byte)EnumWoodMaterial.Empty;
+            dropped = true;
+        }
+        return dropped;
+    }
+
     private int CountWood()
     {
         int count = 0;
@@ -451,7 +618,7 @@ public class BEChoppingBlock : BlockEntity
         return count;
     }
 
-    // Chips fly off the side you hit, more wood cut means more chips. Runs on the server so everyone sees them
+    // Chips fly off the side that got hit, more wood cut means more chips. Runs on the server so everyone sees them
     private void SpawnWoodChips(ItemStack stack, Vec3i voxelPos, BlockFacing facing, int removed)
     {
         if (removed <= 0) return;
@@ -529,15 +696,32 @@ public class BEChoppingBlock : BlockEntity
         }
     }
 
-    private void OnChiselOrKnife(Vec3i voxelPos, BlockFacing facing, IPlayer byPlayer)
+    // The knife peels bark off a 3x3 patch on the face it hit, on bare wood it just takes the one voxel like the chisel
+    private void OnKnife(Vec3i voxelPos, BlockFacing facing)
     {
-        HandleOneVoxel(voxelPos);
+        if (Voxels[voxelPos.X, voxelPos.Y, voxelPos.Z] != (byte)EnumWoodMaterial.Bark)
+        {
+            HandleOneVoxel(voxelPos);
+            return;
+        }
+
+        // No spread into the log, only across the face
+        int rx = facing.Axis == EnumAxis.X ? 0 : 1, ry = facing.Axis == EnumAxis.Y ? 0 : 1, rz = facing.Axis == EnumAxis.Z ? 0 : 1;
+        for (int x = Math.Max(0, voxelPos.X - rx); x <= Math.Min(15, voxelPos.X + rx); x++)
+        for (int y = Math.Max(0, voxelPos.Y - ry); y <= Math.Min(15, voxelPos.Y + ry); y++)
+        for (int z = Math.Max(0, voxelPos.Z - rz); z <= Math.Min(15, voxelPos.Z + rz); z++)
+        {
+            if (Voxels[x, y, z] == (byte)EnumWoodMaterial.Bark) Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
+        }
     }
 
     private bool TryPutLog(IPlayer byPlayer)
     {
         ItemStack heldStack = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
         if (heldStack == null) return false;
+
+        if (heldStack.Collectible is ItemHewnLog) return TryPutHewnLog(byPlayer, heldStack);
+        if (IsHalfLogCode(heldStack.Collectible)) return TryPutHalfLog(byPlayer, heldStack);
 
         // Do we have ANY matches?
         if (!TreeSplittingModSystem.GetRecipes(Api).Any(r => r.Matches(Api.World, heldStack))) return false;
@@ -562,11 +746,107 @@ public class BEChoppingBlock : BlockEntity
     }
 
 
+    // Put a partly hewn log back, exactly how it was left
+    private bool TryPutHewnLog(IPlayer byPlayer, ItemStack hewnStack)
+    {
+        byte[,,]? voxels = ItemHewnLog.GetVoxels(hewnStack);
+        ItemStack? log = ItemHewnLog.GetLog(hewnStack, Api.World);
+        if (voxels == null || log?.Collectible == null) return false;
+
+        WorkItemStack = log;
+        WorkItemStack.StackSize = 1;
+        Voxels = voxels;
+        Horizontal = ItemHewnLog.IsHorizontal(hewnStack);
+        Rotation = ItemHewnLog.GetRotation(hewnStack);
+        HasBeenCut = true;
+
+        SelectedRecipeCode = ItemHewnLog.GetRecipeCode(hewnStack);
+        SelectedRecipe = SelectedRecipeCode == null ? null : FindRecipe(Api, SelectedRecipeCode);
+        // Recipe got removed or doesn't fit anymore, so a new one gets picked
+        if (SelectedRecipe != null && SelectedRecipe.Horizontal != Horizontal)
+        {
+            SelectedRecipe = null;
+            SelectedRecipeCode = null;
+        }
+
+        byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
+        byPlayer.InventoryManager.ActiveHotbarSlot.MarkDirty();
+
+        RegenSelectionBoxes();
+        MarkDirty();
+
+        if (SelectedRecipe == null && !Freeform) OpenRecipeDialog(byPlayer);
+        return true;
+    }
+
+    /// <summary>
+    /// What comes back when the log comes off: the plain log if it hasn't been cut yet, otherwise a partly hewn log that remembers everything.
+    /// </summary>
+    private ItemStack? TakeWorkPiece()
+    {
+        if (WorkItemStack == null) return null;
+
+        // An untouched half log comes back as a half log
+        if (IsHalfLog && CountWood() * 2 == FullLogWood)
+        {
+            ItemStack half = WorkItemStack.Clone();
+            half.StackSize = 1;
+            return half;
+        }
+
+        if (HasBeenCut) return ItemHewnLog.Create(Api.World, WorkItemStack, Voxels, Horizontal, Rotation, SelectedRecipeCode);
+
+        ItemStack log = WorkItemStack.Clone();
+        log.StackSize = 1;
+        return log;
+    }
+
+    // A half log stands on the block like a log, then it's the recipe list like any log. Tipping it lays it flat side up
+    private bool TryPutHalfLog(IPlayer byPlayer, ItemStack halfStack)
+    {
+        WorkItemStack = halfStack.Clone();
+        WorkItemStack.StackSize = 1;
+        Horizontal = false;
+        Rotation = 0;
+        GenerateHalfLogVoxels();
+        HasBeenCut = true;
+        SelectedRecipe = null;
+        SelectedRecipeCode = null;
+
+        byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
+        byPlayer.InventoryManager.ActiveHotbarSlot.MarkDirty();
+
+        RegenSelectionBoxes();
+        MarkDirty();
+
+        OpenRecipeDialog(byPlayer);
+        return true;
+    }
+
+    // Standing it's the back half of the log, lying down the bottom half so the split face is on top
+    private void GenerateHalfLogVoxels()
+    {
+        GenerateLogVoxels();
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (Horizontal ? y >= 8 : z < 8) Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
+        }
+    }
+
+    // Nothing cut off it yet, so it can still be tipped like a fresh log
+    private bool IsUntouchedHalfLog => IsHalfLog && CountWood() * 2 == FullLogWood;
+
+    private bool IsHalfLog => WorkItemStack != null && IsHalfLogCode(WorkItemStack.Collectible);
+
+    private static bool IsHalfLogCode(CollectibleObject collectible) =>
+        collectible.Code.Domain == "treesplitting" && collectible.FirstCodePart() is "halflog" or "debarkedhalflog";
+
     private bool TryTakeLog(IPlayer byPlayer)
     {
-        if (WorkItemStack == null) return false;
-        ItemStack stackToReturn = WorkItemStack.Clone();
-        stackToReturn.StackSize = 1;
+        ItemStack? stackToReturn = TakeWorkPiece();
+        if (stackToReturn == null) return false;
         if (!byPlayer.InventoryManager.TryGiveItemstack(stackToReturn))
             Api.World.SpawnItemEntity(stackToReturn, Pos.ToVec3d().Add(0.5, 1.0, 0.5));
         ResetBlock();
@@ -577,6 +857,54 @@ public class BEChoppingBlock : BlockEntity
         return true;
     }
 
+    // Ruined logs give half what the grid would for the wood that's left, so mistakes still sting. Aged logs give aged firewood
+    private ItemStack LeftoverFirewood() => Firewood(Math.Max(1, (int)(2.0 * CountWood() / FullLogWood)));
+
+    private Block? HalfLog()
+    {
+        string? wood = WorkItemStack?.Collectible.Variant["wood"];
+        if (wood == null) return null;
+
+        // Debarked logs split into debarked halves
+        string kind = WorkItemStack!.Collectible.FirstCodePart() == "debarkedlog" ? "debarkedhalflog-" : "halflog-";
+        return Api.World.GetBlock(new AssetLocation("treesplitting:" + kind + wood + "-ns"));
+    }
+
+    private ItemStack Firewood(int quantity)
+    {
+        string code = WorkItemStack?.Collectible.Code.Path.Contains("aged") == true ? "game:agedfirewood" : "game:firewood";
+        return new ItemStack(Api.World.GetItem(new AssetLocation(code)), quantity);
+    }
+
+    // A piece that fell off: more than a quarter log comes off as a partly hewn log in freeform so it can be worked on,
+    // smaller ones a firewood, slivers are just chips
+    private void DropPiece(List<Vec3i> piece)
+    {
+        if (WorkItemStack == null) return;
+
+        ItemStack drop;
+        // A half that comes off in freeform is a proper half log block, they stack and can go back on later.
+        // Only real halves (a third and up, cuts take wood so a log can't give three), thinner slabs keep their shape as partly hewn logs
+        if (Freeform && piece.Count * 3 >= FullLogWood && piece.Count * 16 <= FullLogWood * 9 && HalfLog() is { } halfLog)
+        {
+            drop = new ItemStack(halfLog);
+        }
+        else if (piece.Count * 4 > FullLogWood)
+        {
+            byte[,,] voxels = new byte[16, 16, 16];
+            foreach (Vec3i v in piece) voxels[v.X, v.Y, v.Z] = Voxels[v.X, v.Y, v.Z];
+            drop = ItemHewnLog.Create(Api.World, WorkItemStack, voxels, Horizontal, Rotation, FreeformCode);
+        }
+        else
+        {
+            // An eighth of a log or more is worth a firewood
+            if (piece.Count * 8 < FullLogWood) return;
+            drop = Firewood(1);
+        }
+
+        Api.World.SpawnItemEntity(drop, Pos.ToVec3d().Add(0.5, 1.2, 0.5));
+    }
+
     private void GenerateLogVoxels()
     {
         for (int x = 0; x < 16; x++)
@@ -584,7 +912,12 @@ public class BEChoppingBlock : BlockEntity
         for (int z = 0; z < 16; z++)
         {
             byte mat = (byte)EnumWoodMaterial.Empty;
-            if (IsInLog(x, y, z)) mat = IsBarkAt(x, y, z) ? (byte)EnumWoodMaterial.Bark : (byte)EnumWoodMaterial.Heartwood;
+            if (IsInLog(x, y, z))
+            {
+                mat = IsBarkAt(x, y, z) ? (byte)EnumWoodMaterial.Bark
+                    : IsSapwoodAt(x, y, z) ? (byte)EnumWoodMaterial.Sapwood
+                    : (byte)EnumWoodMaterial.Heartwood;
+            }
             Voxels[x, y, z] = mat;
         }
     }
@@ -632,12 +965,7 @@ public class BEChoppingBlock : BlockEntity
 
         if (ruined)
         {
-            // Drop Firewood? Or just clear?
-            if (config.RuinedFirewoodDrop > 0)
-            {
-                Api.World.SpawnItemEntity(new ItemStack(Api.World.GetItem(new AssetLocation("game:firewood")), config.RuinedFirewoodDrop),
-                    Pos.ToVec3d().Add(0.5, 1, 0.5));
-            }
+            Api.World.SpawnItemEntity(LeftoverFirewood(), Pos.ToVec3d().Add(0.5, 1, 0.5));
             Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/chop2"), Pos.X, Pos.Y, Pos.Z, player);
             ResetBlock();
             return;
@@ -650,10 +978,13 @@ public class BEChoppingBlock : BlockEntity
             {
                 ItemStack result = SelectedRecipe.GenerateOutput(WorkItemStack, Api.World);
                 if (result != null) result.StackSize = Math.Max(1, (int)Math.Round(result.StackSize * config.OutputMultiplier));
-                //if (!player.InventoryManager.TryGiveItemstack(result))
-                Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+                if (result != null && !player.InventoryManager.TryGiveItemstack(result))
+                {
+                    Api.World.SpawnItemEntity(result, Pos.ToVec3d().Add(0.5, 1, 0.5));
+                }
 
-                Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, player);
+                ChopSounds.Play(Api.World, Pos, ChopSounds.Finish, null);
+                Api.World.SpawnCubeParticles(Pos.ToVec3d().Add(0.5, 1.2, 0.5), WorkItemStack, 0.4f, 40, 0.6f, null, new Vec3f(0, 2, 0));
             }
 
             ResetBlock();
@@ -795,10 +1126,10 @@ public class BEChoppingBlock : BlockEntity
     {
         base.OnBlockBroken(byPlayer);
 
-        // Drop the log instead of just deleting it
-        if (Api.Side == EnumAppSide.Server && WorkItemStack != null)
+        // Drop the log (or what's left of it) instead of just deleting it
+        if (Api.Side == EnumAppSide.Server && TakeWorkPiece() is { } piece)
         {
-            Api.World.SpawnItemEntity(WorkItemStack.Clone(), Pos.ToVec3d().Add(0.5, 0.5, 0.5));
+            Api.World.SpawnItemEntity(piece, Pos.ToVec3d().Add(0.5, 0.5, 0.5));
             WorkItemStack = null;
         }
     }

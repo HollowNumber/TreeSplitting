@@ -2,7 +2,7 @@
   "code": "hewing-club",
   "ingredient": {
     "type": "block",
-    "code": "game:log-*-ud",
+    "code": "game:@(log|logsection)-placed-.*-ud",
     "name": "wood"
   },
   "output": {

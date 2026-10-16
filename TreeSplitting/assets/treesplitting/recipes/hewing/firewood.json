@@ -3,13 +3,13 @@
   "toolmode": "hewing",
   "ingredient": {
     "type": "block",
-    "code": "game:log-*-ud",
+    "code": "game:@(log|logsection)-placed-.*-ud",
     "name": "wood"
   },
   "output": {
     "type": "item",
     "code": "game:firewood",
-    "stackSize": 4
+    "stackSize": 5
   },
   "pattern": [
     [
@@ -30,5 +30,8 @@
       "#######___######",
       "#######___######"
     ]
+  ],
+  "skipWoods": [
+    "aged"
   ]
 }

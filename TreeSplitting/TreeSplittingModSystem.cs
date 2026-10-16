@@ -65,10 +65,14 @@ public class TreeSplittingModSystem : ModSystem
         }
 
         api.RegisterBlockEntityClass(modid + ".choppingblockentity", typeof(BEChoppingBlock));
+        api.RegisterBlockEntityClass(modid + ".hewnlogplaced", typeof(BEHewnLogPlaced));
+        api.RegisterBlockClass(modid + ".hewnlogplaced", typeof(BlockHewnLogPlaced));
         api.RegisterBlockClass(modid + ".choppingblocktop", typeof(BlockChoppingBlockTop));
         api.RegisterBlockClass(modid + ".choppingblock", typeof(BlockChoppingBlock));
+        api.RegisterBlockBehaviorClass(modid + ".makechoppingblock", typeof(BlockBehaviorMakeChoppingBlock));
 
         api.RegisterItemClass(modid + ".itemsaw", typeof(ItemSaw));
+        api.RegisterItemClass(modid + ".itemhewnlog", typeof(ItemHewnLog));
 
     }
 
@@ -107,6 +111,27 @@ public class TreeSplittingModSystem : ModSystem
         {
             recipe.Resolve(api.World);
         }
+
+        if (Config.DisableVanillaLogRecipes) RemoveVanillaLogRecipes(api);
+    }
+
+    // Grid recipes that turn logs into what the chopping block makes
+    private static readonly string[] HewnOutputs = ["plank-", "firewood", "agedfirewood", "debarkedlog-", "supportbeam-"];
+
+    private void RemoveVanillaLogRecipes(ICoreAPI api)
+    {
+        bool TakesLog(GridRecipe recipe) => recipe.Ingredients?.Values.Any(i =>
+            i.Code?.Path is { } path && (path.StartsWith("log") || path.StartsWith("debarkedlog"))) == true;
+
+        bool MakesHewnThing(GridRecipe recipe) => recipe.Output?.Code?.Path is { } path && HewnOutputs.Any(path.StartsWith);
+
+        List<GridRecipe> removed = api.World.GridRecipes.Where(r => TakesLog(r) && MakesHewnThing(r)).ToList();
+        api.World.GridRecipes.RemoveAll(removed.Contains);
+
+        // The fast lookup might already know about them, take them out of there too
+        foreach (var list in api.World.FastSearchRecipesByIngredient.Values) list.RemoveAll(r => r is GridRecipe g && removed.Contains(g));
+
+        api.Logger.Notification("Turned off {0} vanilla log recipes, hewing makes those now", removed.Count);
     }
 
 

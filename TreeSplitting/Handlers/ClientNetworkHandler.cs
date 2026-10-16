@@ -12,7 +12,6 @@ public class ClientNetworkHandler
 {
     private readonly ICoreClientAPI _capi;
     private readonly IClientNetworkChannel _channel;
-    private static readonly AssetLocation ChopSound = new("game:sounds/block/chop2");
 
     // Hold to chop, like the anvil. Started by a click on the log, keeps swinging while the button is held
     private bool _holding;
@@ -20,6 +19,11 @@ public class ClientNetworkHandler
 
     // Heavy hits swing slower when holding down attack
     private const float HeavyHitSwingMultiplier = 1.6f;
+
+    // One loop of the hammerandchisel animation, 20 frames at 30 fps
+    private const int ChiselLoopMs = 700;
+    private string? _swingAnim;
+    private long _swingAnimStopAt;
 
 
     public ClientNetworkHandler(ICoreClientAPI capi)
@@ -47,7 +51,7 @@ public class ClientNetworkHandler
         SwingResult result = TrySwing();
         if (result == SwingResult.None) return;
 
-        // If you miss the log, don't let the game break the chopping block instead
+        // If the swing misses the log, don't let the game break the chopping block instead
         e.Handled = true;
 
         if (result == SwingResult.Swung)
@@ -86,7 +90,7 @@ public class ClientNetworkHandler
 
         if (_capi.ElapsedMilliseconds - _lastSwingMs < interval) return;
 
-        // Keep holding even if you look away for a moment, it just won't swing until you're back on the log
+        // Keep holding even when looking away for a moment, it just won't swing until the log is targeted again
         if (TrySwing() == SwingResult.Swung) _lastSwingMs = _capi.ElapsedMilliseconds;
     }
 
@@ -130,13 +134,13 @@ public class ClientNetworkHandler
         BlockPos pos = be.Pos;
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 
-        string anim = heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+        // The chisel gets the hammer and chisel loop, same one the anvil work uses
+        string anim = tool == EnumTool.Chisel ? "hammerandchisel" : heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
 
         // So we default to "axehit" if the item is silent.
         if (string.IsNullOrEmpty(anim)) anim = "axehit";
 
-        _capi.World.Player.Entity.StartAnimation(anim);
-        _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
+        PlaySwingAnimation(anim, tool == EnumTool.Chisel ? ChiselLoopMs : 400);
 
         var config = TreeSplittingModSystem.GetConfig(_capi);
         if (tool == EnumTool.Axe)
@@ -150,7 +154,7 @@ public class ClientNetworkHandler
         }
         else
         {
-            _capi.World.PlaySoundAt(ChopSound, pos.X, pos.Y, pos.Z, _capi.World.Player);
+            ChopSounds.Play(_capi.World, pos, ChopSounds.ForTool(tool.Value, _capi.World), _capi.World.Player);
         }
 
         _channel.SendPacket(new ToolActionPacket()
@@ -166,4 +170,21 @@ public class ClientNetworkHandler
         return SwingResult.Swung;
     }
 
+    // Keeps the animation going while swings keep coming instead of stopping it halfway through every loop
+    private void PlaySwingAnimation(string anim, int durationMs)
+    {
+        var entity = _capi.World.Player.Entity;
+        if (_swingAnim != null && _swingAnim != anim) entity.StopAnimation(_swingAnim);
+
+        _swingAnim = anim;
+        entity.StartAnimation(anim);
+        _swingAnimStopAt = _capi.World.ElapsedMilliseconds + durationMs;
+
+        _capi.World.RegisterCallback(_ =>
+        {
+            if (_swingAnim != anim || _capi.World.ElapsedMilliseconds < _swingAnimStopAt) return;
+            entity.StopAnimation(anim);
+            _swingAnim = null;
+        }, durationMs);
+    }
 }

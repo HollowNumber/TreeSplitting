@@ -16,6 +16,9 @@ public class TreeSplittingConfig
     // Durability per hit for each tool. The knife and chisel only take out one voxel so they wear faster
     public int AxeDurabilityCost { get; set; } = 1;
     public int SawDurabilityCost { get; set; } = 1;
+
+    // How many columns the saw takes per stroke when sawing between marks
+    public int SawStepsPerStroke { get; set; } = 3;
     public int KnifeDurabilityCost { get; set; } = 2;
     public int ChiselDurabilityCost { get; set; } = 1;
 

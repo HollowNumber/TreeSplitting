@@ -12,6 +12,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.Server;
 using Vintagestory.API.MathTools;
 using TreeSplitting.Config;
 using TreeSplitting.Enums;
@@ -78,6 +79,9 @@ public class BEChoppingBlock : BlockEntity
     // Which voxel each selection box is, same order as SelectionBoxes
     private Vec3i?[] SelectionVoxels = [];
     WoodWorkItemRenderer? renderer;
+
+    // Saw between marks, the corners each player marked. Runtime only, server side
+    private readonly Dictionary<string, SawMarks> sawJobs = new();
     GuiDialogRecipeSelector? dialog;
 
     // Which spots in the log's cross section are wood, and which of those are bark. Same for every log so only work it out once
@@ -318,6 +322,7 @@ public class BEChoppingBlock : BlockEntity
     // Right click with a tool turns the log a quarter turn so the player doesn't have to walk around it, like the anvil
     private bool TryTurnLog(IPlayer byPlayer)
     {
+        ClearSawJobs();
         Voxels = RotateCw(Voxels);
         Rotation = (Rotation + 1) % 4;
 
@@ -344,6 +349,7 @@ public class BEChoppingBlock : BlockEntity
     private bool TryRotateLog(IPlayer byPlayer)
     {
         if (!CanRotate) return false;
+        ClearSawJobs();
 
         // A cut log keeps its shape and just gets tipped over, a fresh one is made again, a half log lands flat side up
         bool freshHalf = IsUntouchedHalfLog;
@@ -657,10 +663,77 @@ public class BEChoppingBlock : BlockEntity
     {
         EnumSawToolModes tool = (EnumSawToolModes)toolMode;
 
+        if (tool == EnumSawToolModes.SawBetweenMarks)
+        {
+            SawBetweenMarks(byPlayer);
+            return;
+        }
         if (tool == EnumSawToolModes.SawDown) HandleSawDown(voxelPos, facing, byPlayer);
         if (facing == BlockFacing.UP) return;
         if (tool == EnumSawToolModes.SawSideways) HandleSawSideways(voxelPos, byPlayer);
     }
+
+    public void SetSawMarks(IPlayer player, SawMarks? marks)
+    {
+        // Same open edge rule the client checks
+        if (marks == null || !marks.StartsAtOpenEdge(Voxels)) sawJobs.Remove(player.PlayerUID);
+        else sawJobs[player.PlayerUID] = marks;
+    }
+
+    // Each stroke takes the next few columns between the marks. Once it's all gone the marks are done
+    private void SawBetweenMarks(IPlayer byPlayer)
+    {
+        // Server forgot them (chunk reload, restart), so the player's screen shouldn't keep showing them either
+        if (!sawJobs.TryGetValue(byPlayer.PlayerUID, out SawMarks? marks))
+        {
+            TellSawMarksGone(byPlayer.PlayerUID);
+            return;
+        }
+
+        int steps = Math.Max(1, TreeSplittingModSystem.GetConfig(Api).SawStepsPerStroke);
+        foreach (Vec3i cell in marks.CutOrder(Voxels))
+        {
+            if (marks.ColumnEmpty(Voxels, cell)) continue;
+            marks.CutColumn(Voxels, cell);
+            SpawnSawdust(cell, marks.Face);
+            if (--steps == 0) break;
+        }
+
+        if (marks.FaceCells().All(c => marks.ColumnEmpty(Voxels, c)))
+        {
+            sawJobs.Remove(byPlayer.PlayerUID);
+            TellSawMarksGone(byPlayer.PlayerUID);
+        }
+    }
+
+    private static readonly SimpleParticleProperties Sawdust = new(
+        2, 4, ColorUtil.ToRgba(220, 225, 205, 160), new Vec3d(), new Vec3d(1 / 16.0, 1 / 16.0, 1 / 16.0),
+        new Vec3f(-0.3f, 0.1f, -0.3f), new Vec3f(0.3f, 0.5f, 0.3f), 0.8f, 0.2f, 0.05f, 0.12f, EnumParticleModel.Cube);
+
+    // Fine pale dust out of the kerf, a lot finer than the axe chips
+    private void SpawnSawdust(Vec3i cell, BlockFacing face)
+    {
+        if (Api.Side != EnumAppSide.Server) return;
+        Sawdust.MinPos.Set(Pos.X + (cell.X + face.Normali.X * 0.6) / 16.0, Pos.Y + (cell.Y + 10 + face.Normali.Y * 0.6) / 16.0,
+            Pos.Z + (cell.Z + face.Normali.Z * 0.6) / 16.0);
+        Api.World.SpawnParticles(Sawdust);
+    }
+
+    // The log moved or went away, so nobody's marks line up anymore
+    private void ClearSawJobs()
+    {
+        foreach (string uid in sawJobs.Keys) TellSawMarksGone(uid);
+        sawJobs.Clear();
+    }
+
+    private void TellSawMarksGone(string uid)
+    {
+        if (Api is not ICoreServerAPI sapi || sapi.World.PlayerByUid(uid) is not IServerPlayer player) return;
+        sapi.Network.GetChannel("treesplitting").SendPacket(new SawMarksPacket { Pos = Pos, Clear = true }, player);
+    }
+
+    // Client side, the marks this player set get drawn on the log
+    public void ShowSawMarks(SawMarks? marks) => renderer?.SetSawMarks(marks);
 
     private void HandleSawSideways(Vec3i voxelPos, IPlayer byPlayer)
     {
@@ -993,6 +1066,7 @@ public class BEChoppingBlock : BlockEntity
 
     private void ResetBlock()
     {
+        ClearSawJobs();
         WorkItemStack = null;
         SelectedRecipe = null;
         SelectedRecipeCode = null;

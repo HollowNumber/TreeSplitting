@@ -4,4 +4,5 @@ public enum EnumSawToolModes : byte
 {
     SawDown = 0,
     SawSideways = 1,
+    SawBetweenMarks = 2,
 }

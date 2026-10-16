@@ -123,15 +123,8 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     {
         BEChoppingBlock? be = blockAccessor.GetBlockEntity(pos) as BEChoppingBlock;
 
-        if (be is { SelectionBoxes.Length: > 0 })
-        {
-            Cuboidf[] combinedBoxes = (Cuboidf[])be.SelectionBoxes.Clone();
-            Cuboidf[] stumpBoxes = base.GetSelectionBoxes(blockAccessor, pos);
-
-            combinedBoxes[0] = stumpBoxes.Length > 0 ? stumpBoxes[0] : Cuboidf.Default();
-
-            return combinedBoxes;
-        }
+        // Gets asked many times a frame, so hand back the array as is. The first box is already the stump
+        if (be is { SelectionBoxes.Length: > 0 }) return be.SelectionBoxes;
 
         return base.GetSelectionBoxes(blockAccessor, pos);
     }

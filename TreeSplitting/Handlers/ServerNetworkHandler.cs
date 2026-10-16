@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Logic;
 using TreeSplitting.Network;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
@@ -22,7 +23,8 @@ public class ServerNetworkHandler
 
         _channel = sapi.Network.GetChannel("treesplitting")
             .SetMessageHandler<ToolActionPacket>(OnServerToolActionPacket)
-            .SetMessageHandler<RecipeSelectPacket>(OnServerRecipePacket);
+            .SetMessageHandler<RecipeSelectPacket>(OnServerRecipePacket)
+            .SetMessageHandler<SawMarksPacket>(OnServerSawMarksPacket);
 
         sapi.Event.PlayerDisconnect += player => _lastSwingMs.Remove(player.PlayerUID);
 
@@ -46,6 +48,27 @@ public class ServerNetworkHandler
         if (be is null) return;
 
         be.SetSelectedRecipe(new AssetLocation(packet.RecipeCode));
+    }
+
+    private void OnServerSawMarksPacket(IServerPlayer fromPlayer, SawMarksPacket packet)
+    {
+        if (fromPlayer.Entity.Pos.SquareDistanceTo(packet.Pos.ToVec3d()) > 100) return;
+
+        BEChoppingBlock be = fromPlayer.Entity.World.BlockAccessor.GetBlockEntity<BEChoppingBlock>(packet.Pos);
+        if (be is null) return;
+
+        if (packet.Clear)
+        {
+            be.SetSawMarks(fromPlayer, null);
+            return;
+        }
+
+        bool InGrid(int v) => v is >= 0 and < 16;
+        if (packet.FaceIndex < 0 || packet.FaceIndex >= BlockFacing.ALLFACES.Length) return;
+        if (!InGrid(packet.X1) || !InGrid(packet.Y1) || !InGrid(packet.Z1) || !InGrid(packet.X2) || !InGrid(packet.Y2) || !InGrid(packet.Z2)) return;
+
+        be.SetSawMarks(fromPlayer, new SawMarks(new Vec3i(packet.X1, packet.Y1, packet.Z1), new Vec3i(packet.X2, packet.Y2, packet.Z2),
+            BlockFacing.ALLFACES[packet.FaceIndex]));
     }
 
     private void OnServerToolActionPacket(IServerPlayer fromPlayer, ToolActionPacket packet)

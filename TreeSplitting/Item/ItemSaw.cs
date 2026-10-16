@@ -3,6 +3,7 @@ using TreeSplitting.Blocks;
 using TreeSplitting.Utils;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
@@ -24,10 +25,11 @@ public class ItemSaw : Vintagestory.API.Common.Item
         {
             toolModes = ObjectCacheUtil.GetOrCreate(api, "treesplittingSawModes", () =>
             {
-                SkillItem[] modes = new SkillItem[2];
+                SkillItem[] modes = new SkillItem[3];
                 
                 modes[0] = new SkillItem(){Code = new AssetLocation("line-down"), Name = "Line"}.WithIcon(capi, (cr, x, y, width, height, rgba) =>  Drawing.DrawUpset(cr, x, y, width, height, rgba, GameMath.PI));
                 modes[1] = new SkillItem(){Code = new AssetLocation("line-sideways"), Name = "Line Sideways"}.WithIcon( capi, (cr, x, y, w, h, c) => Drawing.DrawUpDown(cr, x, y, w, h, c, GameMath.PI / 2));
+                modes[2] = new SkillItem(){Code = new AssetLocation("between-marks"), Name = Lang.Get("treesplitting:toolmode-sawmarks")}.WithIcon(capi, (cr, x, y, w, h, c) => Drawing.DrawSplit(cr, x, y, w, h, c));
 
                 return modes;
             });

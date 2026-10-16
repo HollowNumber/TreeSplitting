@@ -407,7 +407,8 @@ public class BEChoppingBlock : BlockEntity
         // Freeform always fits, last in the list
         if (!Freeform)
         {
-            ItemStack icon = new ItemStack(Api.World.GetItem(new AssetLocation(ItemHewnLog.ItemCode)));
+            // The log as it sits right now, carving it as is
+            ItemStack icon = ItemHewnLog.Create(Api.World, WorkItemStack, Voxels, Horizontal, Rotation, null);
             names.AddRange(stacks.Select(s => s.GetName()));
             stacks.Add(icon);
             names.Add(Lang.Get("treesplitting:recipe-freeform"));

@@ -30,5 +30,7 @@
   "handbook-choppingblock-make-text": "Place a log standing up, then sneak and hold right click on it with an axe. A few swings and it's a chopping block, made from the same wood as the log.",
   "block-hewnlogplaced": "Partly hewn log",
   "heldhelp-hewnlog-place": "Put it down",
-  "ingameerror-hewnlog-nowood": "Not enough wood left for any recipe"
+  "ingameerror-hewnlog-nowood": "Not enough wood left for any recipe",
+  "recipe-freeform": "Freeform",
+  "blockhelp-choppingblock-switchrecipe": "Switch to a recipe"
 }

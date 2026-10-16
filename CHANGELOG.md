@@ -11,6 +11,8 @@ Versions follow [semver](https://semver.org).
 - Right click with an axe, saw, knife or chisel to turn the log a quarter turn
 - Server settings for the axe get sent to players when they join
 - Chopping blocks get made in the world: sneak + hold right click a standing log with an axe. One for every wood
+- Freeform in the recipe list: carve whatever, turn and tip it any time, and switch to a real recipe later if there's wood for it
+- Partly hewn logs can be put down in the world
 
 ### Changed
 - Firewood recipe cross is three planes wide

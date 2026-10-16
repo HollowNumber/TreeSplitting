@@ -14,7 +14,8 @@ public class GuiDialogRecipeSelector : GuiDialog
     List<SkillItem> skillItems = new List<SkillItem>();
     string title;
 
-    public GuiDialogRecipeSelector(ICoreClientAPI capi, IList<ItemStack> recipeOutputs, Action<int> onSelected, string title = "Select Recipe")
+    // names overrides the stack names, for entries that aren't really an item like freeform
+    public GuiDialogRecipeSelector(ICoreClientAPI capi, IList<ItemStack> recipeOutputs, Action<int> onSelected, string title = "Select Recipe", IList<string>? names = null)
         : base(capi)
     {
         OnRecipeSelected = onSelected;
@@ -37,7 +38,7 @@ public class GuiDialogRecipeSelector : GuiDialog
                 skillItems.Add(new SkillItem()
                 {
                     Code = stack.Collectible.Code.Clone(),
-                    Name = stack.GetName(),
+                    Name = names != null && i < names.Count ? names[i] : stack.GetName(),
                     Description = desc,
                     Data = i, // Store the original index
                     RenderHandler = (AssetLocation code, float dt, double posX, double posY) => {

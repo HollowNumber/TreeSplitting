@@ -66,6 +66,10 @@ public class BEChoppingBlock : BlockEntity
     public AssetLocation? SelectedRecipeCode;
     public HewingRecipe? SelectedRecipe; // Runtime only
 
+    // Picked from the recipe list like any other, no target so nothing finishes or ruins. Can be swapped for a real recipe later
+    public static readonly AssetLocation FreeformCode = new("treesplitting:freeform");
+    public bool Freeform => FreeformCode.Equals(SelectedRecipeCode);
+
     // Index 0 is the stump, the rest are voxels. Top* are the same boxes moved down a block for the part above the stump
     public Cuboidf[] SelectionBoxes = [];
     public Cuboidf[] TopSelectionBoxes = [];
@@ -243,6 +247,15 @@ public class BEChoppingBlock : BlockEntity
 
     public void SetSelectedRecipe(AssetLocation code)
     {
+        if (FreeformCode.Equals(code))
+        {
+            SelectedRecipeCode = FreeformCode;
+            SelectedRecipe = null;
+            RegenSelectionBoxes();
+            MarkDirty();
+            return;
+        }
+
         SelectedRecipeCode = code;
         SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
         // Same check as the picker, in case it gets asked for one it didn't show
@@ -290,8 +303,8 @@ public class BEChoppingBlock : BlockEntity
         return false;
     }
 
-    // A cut log can only be tipped when it isn't being hewn into something, the recipe wouldn't line up anymore
-    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || SelectedRecipe == null);
+    // A cut log can only be tipped in freeform, a recipe wouldn't line up anymore
+    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || Freeform);
 
     public bool CanTurn => WorkItemStack != null;
 
@@ -375,6 +388,7 @@ public class BEChoppingBlock : BlockEntity
 
         var matching = new List<HewingRecipe>();
         var stacks = new List<ItemStack>();
+        var names = new List<string>();
 
         foreach (var recipe in TreeSplittingModSystem.GetRecipes(Api))
         {
@@ -390,9 +404,19 @@ public class BEChoppingBlock : BlockEntity
             }
         }
 
-        if (matching.Count == 0)
+        // Freeform always fits, last in the list
+        if (!Freeform)
         {
-            if (HasBeenCut) capi.TriggerIngameError(this, "nowoodleft", Lang.Get("treesplitting:ingameerror-hewnlog-nowood"));
+            ItemStack icon = new ItemStack(Api.World.GetItem(new AssetLocation(ItemHewnLog.ItemCode)));
+            names.AddRange(stacks.Select(s => s.GetName()));
+            stacks.Add(icon);
+            names.Add(Lang.Get("treesplitting:recipe-freeform"));
+        }
+        else names.AddRange(stacks.Select(s => s.GetName()));
+
+        if (stacks.Count == 0)
+        {
+            capi.TriggerIngameError(this, "nowoodleft", Lang.Get("treesplitting:ingameerror-hewnlog-nowood"));
             return;
         }
 
@@ -401,16 +425,16 @@ public class BEChoppingBlock : BlockEntity
         dialog = new GuiDialogRecipeSelector(capi, stacks,
             (selectedIndex) =>
             {
-                if (selectedIndex >= 0 && selectedIndex < matching.Count)
+                if (selectedIndex >= 0 && selectedIndex < stacks.Count)
                 {
-                    var recipe = matching[selectedIndex];
+                    AssetLocation code = selectedIndex < matching.Count ? matching[selectedIndex].Code : FreeformCode;
                     capi.Network.GetChannel("treesplitting").SendPacket(new RecipeSelectPacket()
                     {
                         Pos = Pos,
-                        RecipeCode = recipe.Code.ToString()
+                        RecipeCode = code.ToString()
                     });
                 }
-            }
+            }, names: names
         );
         dialog.TryOpen();
     }
@@ -668,7 +692,7 @@ public class BEChoppingBlock : BlockEntity
         RegenSelectionBoxes();
         MarkDirty();
 
-        if (SelectedRecipe == null) OpenRecipeDialog(byPlayer);
+        if (SelectedRecipe == null && !Freeform) OpenRecipeDialog(byPlayer);
         return true;
     }
 

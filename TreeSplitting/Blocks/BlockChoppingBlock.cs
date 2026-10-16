@@ -45,7 +45,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 Itemstacks = GetLogStacks(capi)
             }];
         }
-        else if (be.SelectedRecipe == null)
+        else if (be.SelectedRecipe == null && !be.Freeform)
         {
             interactions =
             [
@@ -72,7 +72,12 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             ];
         }
 
-        // Tipping the log over works until the first cut, or any time there is no recipe picked
+        if (be.Freeform)
+        {
+            interactions = interactions.Append(new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-switchrecipe", MouseButton = EnumMouseButton.Right });
+        }
+
+        // Tipping the log over works until the first cut, or any time in freeform
         if (be.CanRotate)
         {
             interactions = interactions.Append(new WorldInteraction

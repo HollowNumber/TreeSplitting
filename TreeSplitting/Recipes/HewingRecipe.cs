@@ -13,7 +13,7 @@ public class HewingRecipe : GenericRecipe
     private static readonly HashSet<string> IgnoredCodeParts = new(StringComparer.OrdinalIgnoreCase)
     {
         "log", "placed", "planted", "grown", "resin", "resinharvested", "logsection",
-        "ud", "ns", "we", "ne", "nw", "se", "sw", "ld", "u", "d", "placedlog", "debarkedlog"
+        "ud", "ns", "we", "ne", "nw", "se", "sw", "ld", "u", "d", "placedlog", "debarkedlog", "halflog"
     };
 
     private static readonly Regex LogWoodRegex = new(@"log[-_](.+?)(?:[-_]|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);

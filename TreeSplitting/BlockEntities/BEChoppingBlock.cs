@@ -865,8 +865,9 @@ public class BEChoppingBlock : BlockEntity
         if (WorkItemStack == null) return;
 
         ItemStack drop;
-        // A half that comes off in freeform is a proper half log block, they stack and can go back on later
-        if (Freeform && piece.Count * 4 > FullLogWood && piece.Count * 16 <= FullLogWood * 9 && HalfLog() is { } halfLog)
+        // A half that comes off in freeform is a proper half log block, they stack and can go back on later.
+        // Only real halves (40% and up, a log has room for two), thinner slabs keep their shape as partly hewn logs
+        if (Freeform && piece.Count * 5 >= FullLogWood * 2 && piece.Count * 16 <= FullLogWood * 9 && HalfLog() is { } halfLog)
         {
             drop = new ItemStack(halfLog);
         }

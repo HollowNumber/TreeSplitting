@@ -4,6 +4,14 @@ Versions follow [semver](https://semver.org).
 
 ## [Unreleased]
 
+### Added 
+
+### Changed
+
+### Removed
+
+## [0.2.0] - 2026-10-16
+
 ### Added
 - The axe takes a couple of hits to get through a plane (`HitsPerPlane`, default 2). Vertical cuts split from the top down, horizontal ones notch in from the side
 - Heavy Hit axe mode: takes three planes in one blow for double durability

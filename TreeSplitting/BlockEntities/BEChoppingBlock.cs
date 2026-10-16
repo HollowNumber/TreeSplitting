@@ -683,7 +683,12 @@ public class BEChoppingBlock : BlockEntity
     // Each stroke takes the next few columns between the marks. Once it's all gone the marks are done
     private void SawBetweenMarks(IPlayer byPlayer)
     {
-        if (!sawJobs.TryGetValue(byPlayer.PlayerUID, out SawMarks? marks)) return;
+        // Server forgot them (chunk reload, restart), so the player's screen shouldn't keep showing them either
+        if (!sawJobs.TryGetValue(byPlayer.PlayerUID, out SawMarks? marks))
+        {
+            TellSawMarksGone(byPlayer.PlayerUID);
+            return;
+        }
 
         int steps = Math.Max(1, TreeSplittingModSystem.GetConfig(Api).SawStepsPerStroke);
         foreach (Vec3i cell in marks.CutOrder(Voxels))

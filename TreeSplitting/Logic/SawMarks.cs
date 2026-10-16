@@ -36,8 +36,8 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
     }
 
     /// <summary>
-    /// Cells in the order the saw takes them: it starts at the first mark and works toward the second.
-    /// On the side of the log it goes row by row from the top down, each row from the first mark's side across
+    /// Cells in the order the saw takes them: it starts where the wood is next to open air and works in from there.
+    /// Ties go top down on the side of the log, then from the first mark toward the second
     /// </summary>
     public List<Vec3i> CutOrder(byte[,,] voxels)
     {
@@ -45,8 +45,27 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
         int other = across == U ? V : U;
         int Away(Vec3i c, int axis) => Math.Abs(Get(c, axis) - Get(A, axis));
 
-        if (Normal != 1) return FaceCells().OrderBy(c => -c.Y).ThenBy(c => Away(c, across)).ToList();
-        return FaceCells().OrderBy(c => Away(c, other)).ThenBy(c => Away(c, across)).ToList();
+        List<Vec3i> cells = FaceCells().ToList();
+        List<Vec3i> open = cells.Where(c => Column(c).Any(v => voxels[v.X, v.Y, v.Z] != 0 && NextToAir(voxels, v))).ToList();
+        int FromOpen(Vec3i c) => open.Count == 0 ? 0 : open.Min(o => Math.Abs(Get(c, U) - Get(o, U)) + Math.Abs(Get(c, V) - Get(o, V)));
+
+        var ordered = cells.OrderBy(FromOpen);
+        return (Normal != 1
+            ? ordered.ThenBy(c => -c.Y).ThenBy(c => Away(c, across))
+            : ordered.ThenBy(c => Away(c, other)).ThenBy(c => Away(c, across))).ToList();
+    }
+
+    // Air beside it across the face, the face itself doesn't count since that's always open
+    private bool NextToAir(byte[,,] voxels, Vec3i v)
+    {
+        foreach (int axis in new[] { U, V })
+        foreach (int step in new[] { -1, 1 })
+        {
+            int[] n = [v.X, v.Y, v.Z];
+            n[axis] += step;
+            if (n[axis] is < 0 or > 15 || voxels[n[0], n[1], n[2]] == 0) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -55,20 +74,7 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
     /// </summary>
     public bool StartsAtOpenEdge(byte[,,] voxels)
     {
-        foreach (Vec3i cell in FaceCells())
-        foreach (Vec3i v in Column(cell))
-        {
-            if (voxels[v.X, v.Y, v.Z] == 0) continue;
-
-            foreach (int axis in new[] { U, V })
-            foreach (int step in new[] { -1, 1 })
-            {
-                int[] n = [v.X, v.Y, v.Z];
-                n[axis] += step;
-                if (n[axis] is < 0 or > 15 || voxels[n[0], n[1], n[2]] == 0) return true;
-            }
-        }
-        return false;
+        return FaceCells().Any(c => Column(c).Any(v => voxels[v.X, v.Y, v.Z] != 0 && NextToAir(voxels, v)));
     }
 
     // Every voxel behind a cell, all the way through the log

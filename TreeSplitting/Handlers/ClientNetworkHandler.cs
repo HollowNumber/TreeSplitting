@@ -184,7 +184,7 @@ public class ClientNetworkHandler
             if (_marks == null)
             {
                 if (!fresh) return SwingResult.Blocked;
-                if (_markA == null) _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-first"));
+                if (_markA == null) _capi.TriggerIngameError(this, "sawmarks-first", Lang.Get("treesplitting:sawmarks-hint-first"));
                 return SetMark(be, pos, voxel, sel.Face);
             }
         }
@@ -234,7 +234,7 @@ public class ClientNetworkHandler
             _markA = voxel;
             _markFace = face.Index;
             be.ShowSawMarks(new SawMarks(voxel, voxel, face));
-            _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-second"));
+            _capi.TriggerIngameError(this, "sawmarks-second", Lang.Get("treesplitting:sawmarks-hint-second"));
             return SwingResult.Blocked;
         }
 
@@ -246,7 +246,7 @@ public class ClientNetworkHandler
 
         _marks = new SawMarks(_markA, voxel, face);
         be.ShowSawMarks(_marks);
-        _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-saw"));
+        _capi.TriggerIngameError(this, "sawmarks-saw", Lang.Get("treesplitting:sawmarks-hint-saw"));
         _channel.SendPacket(new SawMarksPacket
         {
             Pos = pos, FaceIndex = face.Index,

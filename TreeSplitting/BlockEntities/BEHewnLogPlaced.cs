@@ -47,7 +47,9 @@ public class BEHewnLogPlaced : BlockEntity
 
     public override bool OnTesselation(ITerrainMeshPool mesher, ITesselatorAPI tessThreadTesselator)
     {
-        if (Api is not ICoreClientAPI capi || Piece == null) return base.OnTesselation(mesher, tessThreadTesselator);
+        if (Api is not ICoreClientAPI capi) return base.OnTesselation(mesher, tessThreadTesselator);
+        // Draw nothing until the shape arrives, otherwise a plain wood cube flashes up first
+        if (Piece == null) return true;
 
         if (mesh == null)
         {
@@ -55,6 +57,13 @@ public class BEHewnLogPlaced : BlockEntity
             ItemStack? log = ItemHewnLog.GetLog(Piece, capi.World);
             if (voxels == null || log?.Collectible == null) return base.OnTesselation(mesher, tessThreadTesselator);
             mesh = LogMesher.GenMesh(capi, log, voxels, ItemHewnLog.GrainAxis(Piece), 0);
+
+            // The chunk mesher wants a colour map and render pass for every face or it just doesn't draw them
+            for (int i = 0; i < mesh.VerticesCount / 4; i++)
+            {
+                mesh.AddColorMapIndex(0, 0);
+                mesh.AddRenderPass((short)EnumChunkRenderPass.Opaque);
+            }
         }
 
         mesher.AddMeshData(mesh);

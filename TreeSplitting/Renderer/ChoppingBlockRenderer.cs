@@ -183,7 +183,13 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         prog.Uniform("colorIn", outlineColorMul);
         if (overlayMeshRef != null) rpi.RenderMesh(overlayMeshRef);
-        if (marksMeshRef != null) rpi.RenderMesh(marksMeshRef);
+        if (marksMeshRef != null)
+        {
+            // The marks sit right on the wood and got lost in it, draw them on top so they show before anything's cut
+            rpi.GLDisableDepthTest();
+            rpi.RenderMesh(marksMeshRef);
+            rpi.GLEnableDepthTest();
+        }
         prog.Stop();
 
         if (linewidth != 1.6f) rpi.LineWidth = 1.6f;

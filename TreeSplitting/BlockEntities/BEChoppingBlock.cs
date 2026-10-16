@@ -479,7 +479,7 @@ public class BEChoppingBlock : BlockEntity
                 break;
         }
 
-        RemoveLoosePieces();
+        bool splitOff = RemoveLoosePieces();
         int removed = woodBefore - CountWood();
         if (removed > 0) HasBeenCut = true;
 
@@ -505,7 +505,8 @@ public class BEChoppingBlock : BlockEntity
         }
 
         CheckIfFinished(byPlayer);
-        if (Freeform) PopOffLastQuarter();
+        // Only after the axe actually split something off, so a small carving doesn't turn into firewood on the next tap
+        if (Freeform && splitOff && tool == EnumTool.Axe) PopOffLastQuarter();
         RegenSelectionBoxes();
         MarkDirty();
     }
@@ -546,7 +547,7 @@ public class BEChoppingBlock : BlockEntity
 
     // Like the anvil, bits that got cut off from the rest fall away. With a recipe anything that still has recipe wood in it stays
     // (firewood is four separate quarters), in freeform the biggest piece is the log and everything else goes
-    private void RemoveLoosePieces()
+    private bool RemoveLoosePieces()
     {
         int[,,] group = new int[16, 16, 16];
         List<List<Vec3i>> pieces = new();
@@ -578,7 +579,7 @@ public class BEChoppingBlock : BlockEntity
             }
         }
 
-        if (pieces.Count < 2) return;
+        if (pieces.Count < 2) return false;
 
         List<Vec3i> main = pieces.MaxBy(p => p.Count)!;
         bool[,,]? target = TargetVoxels;
@@ -586,12 +587,15 @@ public class BEChoppingBlock : BlockEntity
         // All waste somehow, keep the biggest so there's still a log
         bool anyKept = pieces.Any(Keep);
 
+        bool dropped = false;
         foreach (List<Vec3i> piece in pieces)
         {
             if (anyKept ? Keep(piece) : piece == main) continue;
             if (Api.Side == EnumAppSide.Server) DropPiece(piece);
             foreach (Vec3i v in piece) Voxels[v.X, v.Y, v.Z] = (byte)EnumWoodMaterial.Empty;
+            dropped = true;
         }
+        return dropped;
     }
 
     private int CountWood()

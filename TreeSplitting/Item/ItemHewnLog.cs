@@ -1,11 +1,13 @@
 using System.Linq;
 using System.Text;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Blocks;
 using TreeSplitting.Rendering;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
 namespace TreeSplitting.Item;
@@ -54,7 +56,7 @@ public class ItemHewnLog : Vintagestory.API.Common.Item
     public static bool IsHorizontal(ItemStack stack) => stack.Attributes.GetBool("horizontal");
     public static int GetRotation(ItemStack stack) => stack.Attributes.GetInt("rotation");
     // Same as the chopping block, a lying log turned a quarter has its grain along Z
-    private static int GrainAxis(ItemStack stack) => !IsHorizontal(stack) ? 1 : GetRotation(stack) % 2 == 0 ? 0 : 2;
+    public static int GrainAxis(ItemStack stack) => !IsHorizontal(stack) ? 1 : GetRotation(stack) % 2 == 0 ? 0 : 2;
 
     public static AssetLocation? GetRecipeCode(ItemStack stack)
     {
@@ -86,6 +88,39 @@ public class ItemHewnLog : Vintagestory.API.Common.Item
         });
 
         base.OnBeforeRender(capi, itemstack, target, ref renderinfo);
+    }
+
+    // Right click a block face to put it down in the world as it is, for sculptures and the like
+    public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
+    {
+        IPlayer? player = (byEntity as EntityPlayer)?.Player;
+        if (!firstEvent || blockSel == null || player == null || GetVoxels(slot.Itemstack) == null)
+        {
+            base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent, ref handling);
+            return;
+        }
+
+        IWorldAccessor world = byEntity.World;
+        BlockPos pos = blockSel.Position.AddCopy(blockSel.Face);
+        Block placed = world.GetBlock(new AssetLocation(BlockHewnLogPlaced.BlockCode));
+        if (placed == null || world.BlockAccessor.GetBlock(pos).Replaceable < 6000 ||
+            !world.Claims.TryAccess(player, pos, EnumBlockAccessFlags.BuildOrBreak)) return;
+
+        handling = EnumHandHandling.PreventDefault;
+        if (world.Side != EnumAppSide.Server) return;
+
+        world.BlockAccessor.SetBlock(placed.Id, pos);
+        if (world.BlockAccessor.GetBlockEntity(pos) == null) world.BlockAccessor.SpawnBlockEntity(placed.EntityClass, pos);
+        if (world.BlockAccessor.GetBlockEntity(pos) is BEHewnLogPlaced be) be.SetPiece(slot.TakeOut(1));
+        slot.MarkDirty();
+
+        world.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), pos.X + 0.5, pos.Y + 0.5, pos.Z + 0.5, null);
+    }
+
+    public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
+    {
+        return new[] { new WorldInteraction { ActionLangCode = "treesplitting:heldhelp-hewnlog-place", MouseButton = EnumMouseButton.Right } }
+            .Append(base.GetHeldInteractionHelp(inSlot));
     }
 
     private static string Hash(byte[] bytes)

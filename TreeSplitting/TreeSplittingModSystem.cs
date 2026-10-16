@@ -65,6 +65,8 @@ public class TreeSplittingModSystem : ModSystem
         }
 
         api.RegisterBlockEntityClass(modid + ".choppingblockentity", typeof(BEChoppingBlock));
+        api.RegisterBlockEntityClass(modid + ".hewnlogplaced", typeof(BEHewnLogPlaced));
+        api.RegisterBlockClass(modid + ".hewnlogplaced", typeof(BlockHewnLogPlaced));
         api.RegisterBlockClass(modid + ".choppingblocktop", typeof(BlockChoppingBlockTop));
         api.RegisterBlockClass(modid + ".choppingblock", typeof(BlockChoppingBlock));
         api.RegisterBlockBehaviorClass(modid + ".makechoppingblock", typeof(BlockBehaviorMakeChoppingBlock));

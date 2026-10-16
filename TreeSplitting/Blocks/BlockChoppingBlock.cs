@@ -65,7 +65,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 {
                     ActionLangCode = "treesplitting:blockhelp-choppingblock-turn",
                     MouseButton = EnumMouseButton.Right,
-                    Itemstacks = ObjectCacheUtil.GetToolStacks(capi, EnumTool.Axe).Concat(ObjectCacheUtil.GetToolStacks(capi, EnumTool.Saw)).ToArray()
+                    Itemstacks = new[] { EnumTool.Axe, EnumTool.Saw, EnumTool.Knife, EnumTool.Chisel }.SelectMany(t => ObjectCacheUtil.GetToolStacks(capi, t)).ToArray()
                 },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];

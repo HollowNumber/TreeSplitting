@@ -8,7 +8,7 @@ Versions follow [semver](https://semver.org).
 - The axe takes a couple of hits to get through a plane (`HitsPerPlane`, default 2). Vertical cuts split from the top down, horizontal ones notch in from the side
 - Heavy Hit axe mode: takes three planes in one blow for double durability
 - Chop sounds made from layered vanilla sounds, different for a partial hit, a finished plane and a heavy hit
-- Right click with an axe or saw to turn the log a quarter turn
+- Right click with an axe, saw, knife or chisel to turn the log a quarter turn
 - Server settings for the axe get sent to players when they join
 - Chopping blocks get made in the world: sneak + hold right click a standing log with an axe. One for every wood
 

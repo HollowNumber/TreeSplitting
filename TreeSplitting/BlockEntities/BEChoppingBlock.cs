@@ -298,7 +298,7 @@ public class BEChoppingBlock : BlockEntity
     private static bool IsHoldingTurningTool(IPlayer byPlayer)
     {
         EnumTool? tool = byPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible?.Tool;
-        return tool is EnumTool.Axe or EnumTool.Saw;
+        return tool is EnumTool.Axe or EnumTool.Saw or EnumTool.Knife or EnumTool.Chisel;
     }
 
     // Right click with a tool turns the log a quarter turn so the player doesn't have to walk around it, like the anvil

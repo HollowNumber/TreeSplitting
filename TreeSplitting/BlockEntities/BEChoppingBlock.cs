@@ -304,7 +304,7 @@ public class BEChoppingBlock : BlockEntity
     }
 
     // A cut log can only be tipped in freeform, a recipe wouldn't line up anymore
-    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || Freeform);
+    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || Freeform || IsUntouchedHalfLog);
 
     // Before anything's picked a right click opens the picker, tool in hand or not
     public bool CanTurn => WorkItemStack != null && (SelectedRecipe != null || Freeform);
@@ -345,14 +345,16 @@ public class BEChoppingBlock : BlockEntity
     {
         if (!CanRotate) return false;
 
-        // A cut log keeps its shape and just gets tipped over, a fresh one is made again
-        if (HasBeenCut) TipVoxels(!Horizontal);
+        // A cut log keeps its shape and just gets tipped over, a fresh one is made again, a half log lands flat side up
+        bool freshHalf = IsUntouchedHalfLog;
+        if (HasBeenCut && !freshHalf) TipVoxels(!Horizontal);
         Horizontal = !Horizontal;
         Rotation = 0;
         SelectedRecipe = null;
         // Freeform doesn't care how the log sits so it stays on
         SelectedRecipeCode = Freeform ? FreeformCode : null;
-        if (!HasBeenCut) GenerateLogVoxels();
+        if (freshHalf) GenerateHalfLogVoxels();
+        else if (!HasBeenCut) GenerateLogVoxels();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, byPlayer);
         RegenSelectionBoxes();
@@ -361,7 +363,7 @@ public class BEChoppingBlock : BlockEntity
         if (Api.Side == EnumAppSide.Client)
         {
             dialog?.TryClose();
-            if (!HasBeenCut) OpenRecipeDialog(byPlayer);
+            if (!HasBeenCut || freshHalf) OpenRecipeDialog(byPlayer);
         }
 
         return true;
@@ -799,20 +801,14 @@ public class BEChoppingBlock : BlockEntity
         return log;
     }
 
-    // A half log lies on the block flat side up, the bottom half of a lying log, then it's the recipe list like any log
+    // A half log stands on the block like a log, then it's the recipe list like any log. Tipping it lays it flat side up
     private bool TryPutHalfLog(IPlayer byPlayer, ItemStack halfStack)
     {
         WorkItemStack = halfStack.Clone();
         WorkItemStack.StackSize = 1;
-        Horizontal = true;
+        Horizontal = false;
         Rotation = 0;
-        GenerateLogVoxels();
-        for (int x = 0; x < 16; x++)
-        for (int y = 8; y < 16; y++)
-        for (int z = 0; z < 16; z++)
-        {
-            Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
-        }
+        GenerateHalfLogVoxels();
         HasBeenCut = true;
         SelectedRecipe = null;
         SelectedRecipeCode = null;
@@ -826,6 +822,21 @@ public class BEChoppingBlock : BlockEntity
         OpenRecipeDialog(byPlayer);
         return true;
     }
+
+    // Standing it's the back half of the log, lying down the bottom half so the split face is on top
+    private void GenerateHalfLogVoxels()
+    {
+        GenerateLogVoxels();
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (Horizontal ? y >= 8 : z < 8) Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
+        }
+    }
+
+    // Nothing cut off it yet, so it can still be tipped like a fresh log
+    private bool IsUntouchedHalfLog => IsHalfLog && CountWood() * 2 == FullLogWood;
 
     private bool IsHalfLog => WorkItemStack != null && IsHalfLogCode(WorkItemStack.Collectible);
 

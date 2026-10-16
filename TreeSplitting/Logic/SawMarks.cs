@@ -36,37 +36,17 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
     }
 
     /// <summary>
-    /// Cells in the order the saw takes them: rows from the side of the rectangle that's next to open air, working inward
+    /// Cells in the order the saw takes them: it starts at the first mark and works toward the second.
+    /// On the side of the log it goes row by row from the top down, each row from the first mark's side across
     /// </summary>
     public List<Vec3i> CutOrder(byte[,,] voxels)
     {
-        int u1 = Math.Min(Get(A, U), Get(B, U)), u2 = Math.Max(Get(A, U), Get(B, U));
-        int v1 = Math.Min(Get(A, V), Get(B, V)), v2 = Math.Max(Get(A, V), Get(B, V));
+        int across = Normal == 1 ? U : (U == 1 ? V : U);
+        int other = across == U ? V : U;
+        int Away(Vec3i c, int axis) => Math.Abs(Get(c, axis) - Get(A, axis));
 
-        // How much of the line just outside each edge is already empty all the way through
-        int Air(int axis, int at, int from, int to)
-        {
-            int air = 0;
-            for (int i = from; i <= to; i++)
-            {
-                int other = axis == U ? V : U;
-                if (at < 0 || at > 15 || ColumnEmpty(voxels, Make(axis, at, other, i, Normal, 0))) air++;
-            }
-            return air;
-        }
-
-        var edges = new (int air, Func<Vec3i, int> key)[]
-        {
-            (Air(U, u1 - 1, v1, v2), c => Get(c, U)),
-            (Air(U, u2 + 1, v1, v2), c => -Get(c, U)),
-            (Air(V, v1 - 1, u1, u2), c => Get(c, V)),
-            (Air(V, v2 + 1, u1, u2), c => -Get(c, V)),
-        };
-        // Sawing on a side of the log always goes from the top down, like a real saw cut
-        if (Normal != 1) return FaceCells().OrderBy(c => -c.Y).ToList();
-
-        var start = edges.MaxBy(e => e.air);
-        return FaceCells().OrderBy(start.key).ToList();
+        if (Normal != 1) return FaceCells().OrderBy(c => -c.Y).ThenBy(c => Away(c, across)).ToList();
+        return FaceCells().OrderBy(c => Away(c, other)).ThenBy(c => Away(c, across)).ToList();
     }
 
     // Every voxel behind a cell, all the way through the log

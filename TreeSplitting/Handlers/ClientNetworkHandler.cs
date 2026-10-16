@@ -20,6 +20,11 @@ public class ClientNetworkHandler
     // Heavy hits swing slower when holding down attack
     private const float HeavyHitSwingMultiplier = 1.6f;
 
+    // One loop of the hammerandchisel animation, 20 frames at 30 fps
+    private const int ChiselLoopMs = 700;
+    private string? _swingAnim;
+    private long _swingAnimStopAt;
+
 
     public ClientNetworkHandler(ICoreClientAPI capi)
     {
@@ -129,13 +134,13 @@ public class ClientNetworkHandler
         BlockPos pos = be.Pos;
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 
-        string anim = heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+        // The chisel gets the hammer and chisel loop, same one the anvil work uses
+        string anim = tool == EnumTool.Chisel ? "hammerandchisel" : heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
 
         // So we default to "axehit" if the item is silent.
         if (string.IsNullOrEmpty(anim)) anim = "axehit";
 
-        _capi.World.Player.Entity.StartAnimation(anim);
-        _capi.World.RegisterCallback((_) => _capi.World.Player.Entity.StopAnimation(anim), 400);
+        PlaySwingAnimation(anim, tool == EnumTool.Chisel ? ChiselLoopMs : 400);
 
         var config = TreeSplittingModSystem.GetConfig(_capi);
         if (tool == EnumTool.Axe)
@@ -165,4 +170,21 @@ public class ClientNetworkHandler
         return SwingResult.Swung;
     }
 
+    // Keeps the animation going while swings keep coming instead of stopping it halfway through every loop
+    private void PlaySwingAnimation(string anim, int durationMs)
+    {
+        var entity = _capi.World.Player.Entity;
+        if (_swingAnim != null && _swingAnim != anim) entity.StopAnimation(_swingAnim);
+
+        _swingAnim = anim;
+        entity.StartAnimation(anim);
+        _swingAnimStopAt = _capi.World.ElapsedMilliseconds + durationMs;
+
+        _capi.World.RegisterCallback(_ =>
+        {
+            if (_swingAnim != anim || _capi.World.ElapsedMilliseconds < _swingAnimStopAt) return;
+            entity.StopAnimation(anim);
+            _swingAnim = null;
+        }, durationMs);
+    }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TreeSplitting.Logic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -101,7 +102,9 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
 
         ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
         slot.Itemstack?.Collectible.DamageItem(world, byPlayer.Entity, slot, DurabilityCost);
-        world.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), pos.X + 0.5, pos.Y + 0.5, pos.Z + 0.5, null);
+        // Same payoff as finishing a recipe
+        ChopSounds.Play(world, pos.DownCopy(), ChopSounds.Finish, null);
+        world.SpawnCubeParticles(pos.ToVec3d().Add(0.5, 0.7, 0.5), new ItemStack(block), 0.4f, 40, 0.6f, null, new Vec3f(0, 2, 0));
     }
 
     public override bool OnBlockInteractCancel(float secondsUsed, IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel, ref EnumHandling handling)
@@ -113,7 +116,9 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
 
     public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer, ref EnumHandling handling)
     {
-        if (!IsStandingLog || world.Api is not ICoreClientAPI capi) return [];
+        // Only worth mentioning with an axe in hand
+        if (!IsStandingLog || world.Api is not ICoreClientAPI capi ||
+            forPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible?.Tool != EnumTool.Axe) return [];
 
         return
         [

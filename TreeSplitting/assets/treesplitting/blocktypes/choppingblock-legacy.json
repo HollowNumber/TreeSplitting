@@ -66,5 +66,11 @@
     "handbook": {
       "exclude": true
     }
-  }
+  },
+  "drops": [
+    {
+      "type": "block",
+      "code": "treesplitting:choppingblock-oak"
+    }
+  ]
 }

@@ -19,6 +19,8 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
 
     // Last swing each player got to, so every swing only chops once
     private readonly Dictionary<string, int> lastSwing = new();
+    // Bumped on every start so an old stop timer doesn't cut a new swing short
+    private int swingSession;
 
     public BlockBehaviorMakeChoppingBlock(Block block) : base(block)
     {
@@ -51,7 +53,17 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
         }
 
         lastSwing[byPlayer.PlayerUID] = -1;
-        if (world.Side == EnumAppSide.Client) byPlayer.Entity.StartAnimation("axechop");
+        if (world.Side == EnumAppSide.Client)
+        {
+            byPlayer.Entity.StartAnimation("axechop");
+
+            // Once the log's a chopping block nothing of ours gets called anymore, so make sure the swinging stops on its own
+            int session = ++swingSession;
+            world.RegisterCallback(_ =>
+            {
+                if (session == swingSession) byPlayer.Entity.StopAnimation("axechop");
+            }, (int)(Swings * SwingInterval(world) * 1000) + 100);
+        }
         return true;
     }
 
@@ -121,9 +133,7 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
 
     public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer, ref EnumHandling handling)
     {
-        // Only worth mentioning with an axe in hand
-        if (!IsStandingLog || world.Api is not ICoreClientAPI capi ||
-            forPlayer.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible?.Tool != EnumTool.Axe) return [];
+        if (!IsStandingLog || world.Api is not ICoreClientAPI capi) return [];
 
         return
         [

@@ -719,6 +719,7 @@ public class BEChoppingBlock : BlockEntity
         if (heldStack == null) return false;
 
         if (heldStack.Collectible is ItemHewnLog) return TryPutHewnLog(byPlayer, heldStack);
+        if (heldStack.Collectible.Code.Domain == "treesplitting" && heldStack.Collectible.FirstCodePart() == "halflog") return TryPutHalfLog(byPlayer, heldStack);
 
         // Do we have ANY matches?
         if (!TreeSplittingModSystem.GetRecipes(Api).Any(r => r.Matches(Api.World, heldStack))) return false;
@@ -790,6 +791,34 @@ public class BEChoppingBlock : BlockEntity
         return log;
     }
 
+    // A half log stands on the block as half of a standing log in freeform, ready to be split into quarters
+    private bool TryPutHalfLog(IPlayer byPlayer, ItemStack halfStack)
+    {
+        Block? log = Api.World.GetBlock(new AssetLocation("game:log-placed-" + halfStack.Collectible.Variant["wood"] + "-ud"));
+        if (log == null) return false;
+
+        WorkItemStack = new ItemStack(log);
+        Horizontal = false;
+        Rotation = 0;
+        GenerateLogVoxels();
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 8; z++)
+        {
+            Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
+        }
+        HasBeenCut = true;
+        SelectedRecipe = null;
+        SelectedRecipeCode = FreeformCode;
+
+        byPlayer.InventoryManager.ActiveHotbarSlot.TakeOut(1);
+        byPlayer.InventoryManager.ActiveHotbarSlot.MarkDirty();
+
+        RegenSelectionBoxes();
+        MarkDirty();
+        return true;
+    }
+
     private bool TryTakeLog(IPlayer byPlayer)
     {
         ItemStack? stackToReturn = TakeWorkPiece();
@@ -807,6 +836,12 @@ public class BEChoppingBlock : BlockEntity
     // Ruined logs give half what the grid would for the wood that's left, so mistakes still sting. Aged logs give aged firewood
     private ItemStack LeftoverFirewood() => Firewood(Math.Max(1, (int)(2.0 * CountWood() / FullLogWood)));
 
+    private Block? HalfLog()
+    {
+        string? wood = WorkItemStack?.Collectible.Variant["wood"];
+        return wood == null ? null : Api.World.GetBlock(new AssetLocation("treesplitting:halflog-" + wood + "-ns"));
+    }
+
     private ItemStack Firewood(int quantity)
     {
         string code = WorkItemStack?.Collectible.Code.Path.Contains("aged") == true ? "game:agedfirewood" : "game:firewood";
@@ -820,7 +855,12 @@ public class BEChoppingBlock : BlockEntity
         if (WorkItemStack == null) return;
 
         ItemStack drop;
-        if (piece.Count * 4 > FullLogWood)
+        // A half that comes off in freeform is a proper half log block, they stack and can go back on later
+        if (Freeform && piece.Count * 4 > FullLogWood && piece.Count * 16 <= FullLogWood * 9 && HalfLog() is { } halfLog)
+        {
+            drop = new ItemStack(halfLog);
+        }
+        else if (piece.Count * 4 > FullLogWood)
         {
             byte[,,] voxels = new byte[16, 16, 16];
             foreach (Vec3i v in piece) voxels[v.X, v.Y, v.Z] = Voxels[v.X, v.Y, v.Z];

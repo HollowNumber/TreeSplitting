@@ -799,17 +799,17 @@ public class BEChoppingBlock : BlockEntity
         return log;
     }
 
-    // A half log stands on the block as half of a standing log, then it's the recipe list like any log
+    // A half log lies on the block flat side up, the bottom half of a lying log, then it's the recipe list like any log
     private bool TryPutHalfLog(IPlayer byPlayer, ItemStack halfStack)
     {
         WorkItemStack = halfStack.Clone();
         WorkItemStack.StackSize = 1;
-        Horizontal = false;
+        Horizontal = true;
         Rotation = 0;
         GenerateLogVoxels();
         for (int x = 0; x < 16; x++)
-        for (int y = 0; y < 16; y++)
-        for (int z = 0; z < 8; z++)
+        for (int y = 8; y < 16; y++)
+        for (int z = 0; z < 16; z++)
         {
             Voxels[x, y, z] = (byte)EnumWoodMaterial.Empty;
         }

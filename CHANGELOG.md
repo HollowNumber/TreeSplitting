@@ -10,9 +10,14 @@ Versions follow [semver](https://semver.org).
 - Chop sounds made from layered vanilla sounds, different for a partial hit, a finished plane and a heavy hit
 - Right click with an axe or saw to turn the log a quarter turn
 - Server settings for the axe get sent to players when they join
+- Chopping blocks get made in the world: sneak + hold right click a standing log with an axe. One for every wood
 
 ### Changed
 - Firewood recipe cross is three planes wide
+- The chopping block is round like the log on it
+
+### Removed
+- The grid recipe for the chopping block
 
 ## [0.1.0] - 2026-10-12
 

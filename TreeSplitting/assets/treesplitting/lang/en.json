@@ -21,5 +21,11 @@
   "handbook-hewing-heavyhit": "The axe's heavy hit takes three layers off in one blow, but wears the axe faster and can easily take wood the recipe needs.",
   "toolmode-heavyhit": "Heavy Hit",
   "handbook-hewing-makes": "Hewing recipes",
-  "handbook-hewing-makes-desc": "Sneak + right click it with a log to start hewing. Everything you can make on it:"
+  "handbook-hewing-makes-desc": "Sneak + right click it with a log to start hewing. Everything you can make on it:",
+  "block-choppingblock-*": "Chopping Block",
+  "blockdesc-choppingblock-*": "A sturdy stump for hewing logs into beams.",
+  "blockhelp-log-makechoppingblock": "Make a chopping block",
+  "ingameerror-choppingblock-space": "Needs space above",
+  "handbook-choppingblock-make-title": "Making one",
+  "handbook-choppingblock-make-text": "Place a log standing up, then sneak and hold right click on it with an axe. A few swings and it's a chopping block, made from the same wood as the log."
 }

@@ -575,6 +575,7 @@ public class BEChoppingBlock : BlockEntity
         foreach (List<Vec3i> piece in pieces)
         {
             if (anyKept ? Keep(piece) : piece == main) continue;
+            if (Api.Side == EnumAppSide.Server) DropPiece(piece);
             foreach (Vec3i v in piece) Voxels[v.X, v.Y, v.Z] = (byte)EnumWoodMaterial.Empty;
         }
     }
@@ -778,11 +779,35 @@ public class BEChoppingBlock : BlockEntity
     }
 
     // Ruined logs give half what the grid would for the wood that's left, so mistakes still sting. Aged logs give aged firewood
-    private ItemStack LeftoverFirewood()
+    private ItemStack LeftoverFirewood() => Firewood(Math.Max(1, (int)(2.0 * CountWood() / FullLogWood)));
+
+    private ItemStack Firewood(int quantity)
     {
         string code = WorkItemStack?.Collectible.Code.Path.Contains("aged") == true ? "game:agedfirewood" : "game:firewood";
-        int quantity = Math.Max(1, (int)(2.0 * CountWood() / FullLogWood));
         return new ItemStack(Api.World.GetItem(new AssetLocation(code)), quantity);
+    }
+
+    // A piece that fell off: more than a quarter log comes off as a partly hewn log in freeform so it can be worked on,
+    // smaller ones a firewood, slivers are just chips
+    private void DropPiece(List<Vec3i> piece)
+    {
+        if (WorkItemStack == null) return;
+
+        ItemStack drop;
+        if (piece.Count * 4 > FullLogWood)
+        {
+            byte[,,] voxels = new byte[16, 16, 16];
+            foreach (Vec3i v in piece) voxels[v.X, v.Y, v.Z] = Voxels[v.X, v.Y, v.Z];
+            drop = ItemHewnLog.Create(Api.World, WorkItemStack, voxels, Horizontal, Rotation, FreeformCode);
+        }
+        else
+        {
+            // An eighth of a log or more is worth a firewood
+            if (piece.Count * 8 < FullLogWood) return;
+            drop = Firewood(1);
+        }
+
+        Api.World.SpawnItemEntity(drop, Pos.ToVec3d().Add(0.5, 1.2, 0.5));
     }
 
     private void GenerateLogVoxels()

@@ -2,7 +2,7 @@
   "code": "hewing-halflogagedfirewood",
   "ingredient": {
     "type": "block",
-    "code": "treesplitting:halflog-aged-*",
+    "code": "treesplitting:@(halflog|debarkedhalflog)-(aged|veryaged)-.*",
     "name": "wood"
   },
   "output": {

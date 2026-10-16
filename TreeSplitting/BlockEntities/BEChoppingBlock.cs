@@ -719,7 +719,7 @@ public class BEChoppingBlock : BlockEntity
         if (heldStack == null) return false;
 
         if (heldStack.Collectible is ItemHewnLog) return TryPutHewnLog(byPlayer, heldStack);
-        if (heldStack.Collectible.Code.Domain == "treesplitting" && heldStack.Collectible.FirstCodePart() == "halflog") return TryPutHalfLog(byPlayer, heldStack);
+        if (IsHalfLogCode(heldStack.Collectible)) return TryPutHalfLog(byPlayer, heldStack);
 
         // Do we have ANY matches?
         if (!TreeSplittingModSystem.GetRecipes(Api).Any(r => r.Matches(Api.World, heldStack))) return false;
@@ -827,7 +827,10 @@ public class BEChoppingBlock : BlockEntity
         return true;
     }
 
-    private bool IsHalfLog => WorkItemStack?.Collectible.Code.Domain == "treesplitting" && WorkItemStack.Collectible.FirstCodePart() == "halflog";
+    private bool IsHalfLog => WorkItemStack != null && IsHalfLogCode(WorkItemStack.Collectible);
+
+    private static bool IsHalfLogCode(CollectibleObject collectible) =>
+        collectible.Code.Domain == "treesplitting" && collectible.FirstCodePart() is "halflog" or "debarkedhalflog";
 
     private bool TryTakeLog(IPlayer byPlayer)
     {
@@ -849,7 +852,11 @@ public class BEChoppingBlock : BlockEntity
     private Block? HalfLog()
     {
         string? wood = WorkItemStack?.Collectible.Variant["wood"];
-        return wood == null ? null : Api.World.GetBlock(new AssetLocation("treesplitting:halflog-" + wood + "-ns"));
+        if (wood == null) return null;
+
+        // Debarked logs split into debarked halves
+        string kind = WorkItemStack!.Collectible.FirstCodePart() == "debarkedlog" ? "debarkedhalflog-" : "halflog-";
+        return Api.World.GetBlock(new AssetLocation("treesplitting:" + kind + wood + "-ns"));
     }
 
     private ItemStack Firewood(int quantity)

@@ -34,5 +34,7 @@
   "recipe-freeform": "Freeform",
   "blockhelp-choppingblock-switchrecipe": "Switch to a recipe",
   "block-halflog-*": "Half Log",
-  "blockdesc-halflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood."
+  "blockdesc-halflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood.",
+  "block-debarkedhalflog-*": "Debarked Half Log",
+  "blockdesc-debarkedhalflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood."
 }

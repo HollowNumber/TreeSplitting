@@ -1,0 +1,128 @@
+{
+  "code": "debarkedhalflog",
+  "behaviors": [
+    {
+      "name": "NWOrientable"
+    }
+  ],
+  "variantgroups": [
+    {
+      "code": "wood",
+      "states": [
+        "aged",
+        "veryaged",
+        "rotten",
+        "veryrotten"
+      ],
+      "loadFromProperties": "block/wood"
+    },
+    {
+      "code": "orientation",
+      "states": [
+        "ns",
+        "we"
+      ]
+    }
+  ],
+  "attributes": {
+    "handbook": {
+      "groupBy": [
+        "debarkedhalflog-*"
+      ]
+    }
+  },
+  "creativeinventory": {
+    "general": [
+      "*-ns"
+    ],
+    "construction": [
+      "*-ns"
+    ]
+  },
+  "shapebytype": {
+    "*-ns": {
+      "base": "treesplitting:block/halflog"
+    },
+    "*-we": {
+      "base": "treesplitting:block/halflog",
+      "rotateY": 90
+    }
+  },
+  "drawtype": "json",
+  "textures": {
+    "bark": {
+      "base": "game:block/wood/debarked/{wood}"
+    },
+    "end": {
+      "base": "game:block/wood/treetrunk/debarked/{wood}"
+    },
+    "split": {
+      "base": "game:block/wood/debarked/{wood}"
+    },
+    "up": {
+      "base": "game:block/wood/treetrunk/debarked/{wood}"
+    }
+  },
+  "drops": [
+    {
+      "type": "block",
+      "code": "treesplitting:debarkedhalflog-{wood}-ns"
+    }
+  ],
+  "blockmaterial": "Wood",
+  "requiredMiningTier": 1,
+  "resistance": 2,
+  "combustibleProps": {
+    "burnTemperature": 700,
+    "burnDuration": 48
+  },
+  "materialDensity": 700,
+  "sideopaque": {
+    "all": false
+  },
+  "sidesolid": {
+    "all": false,
+    "down": true
+  },
+  "emitsideao": {
+    "all": false
+  },
+  "collisionbox": {
+    "x1": 0,
+    "y1": 0,
+    "z1": 0,
+    "x2": 1,
+    "y2": 0.4375,
+    "z2": 1
+  },
+  "selectionbox": {
+    "x1": 0,
+    "y1": 0,
+    "z1": 0,
+    "x2": 1,
+    "y2": 0.4375,
+    "z2": 1
+  },
+  "sounds": {
+    "place": "game:block/planks",
+    "break": "game:block/planks",
+    "hit": "game:block/planks",
+    "walk": "game:walk/wood"
+  },
+  "heldTpIdleAnimation": "holdbothhandslarge",
+  "heldRightReadyAnimation": "heldblockready",
+  "heldTpUseAnimation": "twohandplaceblock",
+  "tpHandTransform": {
+    "translation": {
+      "x": -1.1,
+      "y": -0.6,
+      "z": -0.6
+    },
+    "rotation": {
+      "x": -83,
+      "y": 72,
+      "z": -99
+    },
+    "scale": 0.5
+  }
+}

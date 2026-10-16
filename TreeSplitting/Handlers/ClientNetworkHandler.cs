@@ -4,6 +4,7 @@ using TreeSplitting.Logic;
 using TreeSplitting.Network;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
 namespace TreeSplitting.Handlers;
@@ -25,13 +26,20 @@ public class ClientNetworkHandler
     private string? _swingAnim;
     private long _swingAnimStopAt;
 
+    // Saw between marks: the block, the first corner and its face, then both corners once the second is set
+    private BlockPos? _markPos;
+    private Vec3i? _markA;
+    private int _markFace;
+    private SawMarks? _marks;
+
 
     public ClientNetworkHandler(ICoreClientAPI capi)
     {
         _capi = capi;
 
         _channel = capi.Network.GetChannel("treesplitting")
-            .SetMessageHandler<ConfigSyncPacket>(OnConfigSync);
+            .SetMessageHandler<ConfigSyncPacket>(OnConfigSync)
+            .SetMessageHandler<SawMarksPacket>(OnSawMarksPacket);
 
         capi.Event.MouseDown += OnMouseDown;
         capi.Event.MouseUp += OnMouseUp;
@@ -44,11 +52,29 @@ public class ClientNetworkHandler
         TreeSplittingModSystem.GetConfig(_capi).HitsPerPlane = packet.HitsPerPlane;
     }
 
+    // The server's done with the marks (all sawn out, or the log moved)
+    private void OnSawMarksPacket(SawMarksPacket packet)
+    {
+        if (packet.Clear && packet.Pos.Equals(_markPos)) ClearMarks(false);
+    }
+
+    private void ClearMarks(bool tellServer)
+    {
+        if (_markPos == null) return;
+
+        BEChoppingBlock.AtPosition(_capi.World.BlockAccessor, _markPos)?.ShowSawMarks(null);
+        if (tellServer) _channel.SendPacket(new SawMarksPacket { Pos = _markPos, Clear = true });
+
+        _markPos = null;
+        _markA = null;
+        _marks = null;
+    }
+
     private void OnMouseDown(MouseEvent e)
     {
         if (e.Button != EnumMouseButton.Left) return;
 
-        SwingResult result = TrySwing();
+        SwingResult result = TrySwing(true);
         if (result == SwingResult.None) return;
 
         // If the swing misses the log, don't let the game break the chopping block instead
@@ -91,7 +117,7 @@ public class ClientNetworkHandler
         if (_capi.ElapsedMilliseconds - _lastSwingMs < interval) return;
 
         // Keep holding even when looking away for a moment, it just won't swing until the log is targeted again
-        if (TrySwing() == SwingResult.Swung) _lastSwingMs = _capi.ElapsedMilliseconds;
+        if (TrySwing(false) == SwingResult.Swung) _lastSwingMs = _capi.ElapsedMilliseconds;
     }
 
     private enum SwingResult
@@ -101,7 +127,7 @@ public class ClientNetworkHandler
         Swung
     }
 
-    private SwingResult TrySwing()
+    private SwingResult TrySwing(bool fresh)
     {
         // We assume that if the mouse isn't grabbed the player is in some ui and therefore we dont interact.
         if (!_capi.Input.MouseGrabbed) return SwingResult.None;
@@ -134,15 +160,38 @@ public class ClientNetworkHandler
         BlockPos pos = be.Pos;
         int mode = heldItemStack.Attributes.GetInt("toolMode");
 
-        // The chisel gets the hammer and chisel loop, same one the anvil work uses
-        string anim = tool == EnumTool.Chisel ? "hammerandchisel" : heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
+        var config = TreeSplittingModSystem.GetConfig(_capi);
+
+        bool marking = tool == EnumTool.Saw && mode == (int)EnumSawToolModes.SawBetweenMarks;
+        if (_markPos != null && (!marking || !_markPos.Equals(pos))) ClearMarks(true);
+
+        if (marking)
+        {
+            // Sneak + click drops the marks
+            if (_capi.World.Player.Entity.Controls.ShiftKey)
+            {
+                if (fresh) ClearMarks(true);
+                return SwingResult.Blocked;
+            }
+
+            // Marks only get set on a fresh click, holding the button doesn't drop a second one on the same spot
+            if (_marks == null)
+            {
+                if (!fresh) return SwingResult.Blocked;
+                return SetMark(be, pos, voxel, sel.Face);
+            }
+        }
+
+        // The chisel gets the hammer and chisel loop, same one the anvil work uses, the marked saw saws back and forth
+        string anim = marking ? "saw"
+            : tool == EnumTool.Chisel ? "hammerandchisel"
+            : heldItemStack.Collectible.GetHeldTpHitAnimation(activeSlot, _capi.World.Player.Entity);
 
         // So we default to "axehit" if the item is silent.
         if (string.IsNullOrEmpty(anim)) anim = "axehit";
 
-        PlaySwingAnimation(anim, tool == EnumTool.Chisel ? ChiselLoopMs : 400);
-
-        var config = TreeSplittingModSystem.GetConfig(_capi);
+        if (marking) PlaySwingAnimation(anim, config.SwingIntervalMs + 150, SawLoopMs / (float)config.SwingIntervalMs);
+        else PlaySwingAnimation(anim, tool == EnumTool.Chisel ? ChiselLoopMs : 400);
         if (tool == EnumTool.Axe)
         {
             // Run the same cut on a copy so the right sound plays straight away instead of after the server answers.
@@ -170,14 +219,52 @@ public class ClientNetworkHandler
         return SwingResult.Swung;
     }
 
+    private SwingResult SetMark(BEChoppingBlock be, BlockPos pos, Vec3i voxel, BlockFacing face)
+    {
+        if (_markA == null)
+        {
+            _markPos = pos.Copy();
+            _markA = voxel;
+            _markFace = face.Index;
+            be.ShowSawMarks(new SawMarks(voxel, voxel, face));
+            return SwingResult.Blocked;
+        }
+
+        if (face.Index != _markFace)
+        {
+            _capi.TriggerIngameError(this, "sawmarksface", Lang.Get("treesplitting:ingameerror-sawmarks-face"));
+            return SwingResult.Blocked;
+        }
+
+        _marks = new SawMarks(_markA, voxel, face);
+        be.ShowSawMarks(_marks);
+        _channel.SendPacket(new SawMarksPacket
+        {
+            Pos = pos, FaceIndex = face.Index,
+            X1 = _markA.X, Y1 = _markA.Y, Z1 = _markA.Z,
+            X2 = voxel.X, Y2 = voxel.Y, Z2 = voxel.Z
+        });
+        return SwingResult.Blocked;
+    }
+
+    // One loop of the vanilla saw animation, 30 frames at 30 fps
+    private const int SawLoopMs = 1000;
+
     // Keeps the animation going while swings keep coming instead of stopping it halfway through every loop
-    private void PlaySwingAnimation(string anim, int durationMs)
+    private void PlaySwingAnimation(string anim, int durationMs, float speed = 1f)
     {
         var entity = _capi.World.Player.Entity;
         if (_swingAnim != null && _swingAnim != anim) entity.StopAnimation(_swingAnim);
 
         _swingAnim = anim;
-        entity.StartAnimation(anim);
+        // Sped up so one loop is one stroke
+        if (speed != 1f && entity.Properties.Client.AnimationsByMetaCode.TryGetValue(anim, out AnimationMetaData? meta))
+        {
+            AnimationMetaData faster = meta.Clone();
+            faster.AnimationSpeed = speed;
+            entity.AnimManager.StartAnimation(faster);
+        }
+        else entity.StartAnimation(anim);
         _swingAnimStopAt = _capi.World.ElapsedMilliseconds + durationMs;
 
         _capi.World.RegisterCallback(_ =>

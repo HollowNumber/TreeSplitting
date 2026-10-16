@@ -1,5 +1,6 @@
 ﻿using System;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Logic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -16,6 +17,7 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private BEChoppingBlock be;
     private MeshRef? meshRef;
     private MeshRef? overlayMeshRef;
+    private MeshRef? marksMeshRef;
     private Matrixf ModelMat = new Matrixf();
     private Vec4f outlineColorMul = new Vec4f(1, 1, 1, 1);
     private readonly Vec3f origin = new Vec3f(0, 0, 0);
@@ -119,9 +121,42 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         }
     }
 
+    /// <summary>
+    /// The saw marks: the two corners bright, the cells between them faint. It's what the player picked, not a hit preview
+    /// </summary>
+    public void SetSawMarks(SawMarks? marks)
+    {
+        marksMeshRef?.Dispose();
+        marksMeshRef = null;
+        if (marks == null) return;
+
+        MeshData mesh = new MeshData(24, 36, false, false, true, false);
+        mesh.SetMode(EnumDrawMode.Lines);
+
+        void AddCube(Vec3i v, int color)
+        {
+            MeshData cube = LineMeshUtil.GetCube(color);
+            for (int i = 0; i < cube.xyz.Length; i += 3)
+            {
+                cube.xyz[i] = cube.xyz[i] / 32f + 1 / 32f + v.X / 16f;
+                cube.xyz[i + 1] = cube.xyz[i + 1] / 32f + 1 / 32f + (v.Y + 10f) / 16f;
+                cube.xyz[i + 2] = cube.xyz[i + 2] / 32f + 1 / 32f + v.Z / 16f;
+            }
+            mesh.AddMeshData(cube);
+        }
+
+        int faint = ColorUtil.ToRgba(140, 120, 200, 255);
+        int bright = ColorUtil.ToRgba(255, 255, 255, 255);
+        foreach (Vec3i cell in marks.FaceCells()) AddCube(cell, faint);
+        AddCube(marks.A, bright);
+        AddCube(marks.B, bright);
+
+        marksMeshRef = api.Render.UploadMesh(mesh);
+    }
+
     private void RenderRecipeOutline()
     {
-        if (overlayMeshRef == null || api.HideGuis) return;
+        if ((overlayMeshRef == null && marksMeshRef == null) || api.HideGuis) return;
 
         // Only show it when holding a tool that works on the log, like clay forming does with clay
         EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
@@ -147,7 +182,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         prog.UniformMatrix("modelViewMatrix", ModelMat.Values);
 
         prog.Uniform("colorIn", outlineColorMul);
-        rpi.RenderMesh(overlayMeshRef);
+        if (overlayMeshRef != null) rpi.RenderMesh(overlayMeshRef);
+        if (marksMeshRef != null) rpi.RenderMesh(marksMeshRef);
         prog.Stop();
 
         if (linewidth != 1.6f) rpi.LineWidth = 1.6f;
@@ -188,5 +224,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         api.Event.UnregisterRenderer(this, EnumRenderStage.AfterFinalComposition);
         meshRef?.Dispose();
         overlayMeshRef?.Dispose();
+        marksMeshRef?.Dispose();
     }
 }

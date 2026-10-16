@@ -36,5 +36,7 @@
   "block-halflog-*": "Half Log",
   "blockdesc-halflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood.",
   "block-debarkedhalflog-*": "Debarked Half Log",
-  "blockdesc-debarkedhalflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood."
+  "blockdesc-debarkedhalflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood.",
+  "toolmode-sawmarks": "Saw Between Marks",
+  "ingameerror-sawmarks-face": "Both marks need to be on the same face"
 }

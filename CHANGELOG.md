@@ -21,6 +21,7 @@ Versions follow [semver](https://semver.org).
 - The saw, knife and chisel have their own sounds, finishing a recipe has a finish sound and a burst of chips
 - The knife strips bark a 3x3 patch at a time
 - Sapwood ring between the bark and the heartwood
+- Saw Between Marks saw mode: click two corners on a face, then hold to saw everything between them out through the whole log (`SawStepsPerStroke`, default 3)
 - The chisel uses the hammer and chisel animation, logs, half logs and chopping blocks get carried in both arms
 
 ### Changed

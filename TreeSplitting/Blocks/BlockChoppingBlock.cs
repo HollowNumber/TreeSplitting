@@ -50,7 +50,6 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             interactions =
             [
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-pickrecipe", MouseButton = EnumMouseButton.Right },
-                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-turn", MouseButton = EnumMouseButton.Right, Itemstacks = TurningTools(capi) },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
         }

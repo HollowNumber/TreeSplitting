@@ -306,7 +306,8 @@ public class BEChoppingBlock : BlockEntity
     // A cut log can only be tipped in freeform, a recipe wouldn't line up anymore
     public bool CanRotate => WorkItemStack != null && (!HasBeenCut || Freeform);
 
-    public bool CanTurn => WorkItemStack != null;
+    // Before anything's picked a right click opens the picker, tool in hand or not
+    public bool CanTurn => WorkItemStack != null && (SelectedRecipe != null || Freeform);
 
     private static bool IsHoldingTurningTool(IPlayer byPlayer)
     {
@@ -349,7 +350,8 @@ public class BEChoppingBlock : BlockEntity
         Horizontal = !Horizontal;
         Rotation = 0;
         SelectedRecipe = null;
-        SelectedRecipeCode = null;
+        // Freeform doesn't care how the log sits so it stays on
+        SelectedRecipeCode = Freeform ? FreeformCode : null;
         if (!HasBeenCut) GenerateLogVoxels();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, byPlayer);
@@ -528,7 +530,8 @@ public class BEChoppingBlock : BlockEntity
         slot.Itemstack?.Collectible.DamageItem(Api.World, byPlayer.Entity, slot, cost);
     }
 
-    // Like the anvil, bits that got cut off from the rest fall away. The biggest connected piece is the log, everything else goes
+    // Like the anvil, bits that got cut off from the rest fall away. With a recipe anything that still has recipe wood in it stays
+    // (firewood is four separate quarters), in freeform the biggest piece is the log and everything else goes
     private void RemoveLoosePieces()
     {
         int[,,] group = new int[16, 16, 16];
@@ -564,9 +567,14 @@ public class BEChoppingBlock : BlockEntity
         if (pieces.Count < 2) return;
 
         List<Vec3i> main = pieces.MaxBy(p => p.Count)!;
+        bool[,,]? target = TargetVoxels;
+        bool Keep(List<Vec3i> piece) => target == null ? piece == main : piece.Any(v => target[v.X, v.Y, v.Z]);
+        // All waste somehow, keep the biggest so there's still a log
+        bool anyKept = pieces.Any(Keep);
+
         foreach (List<Vec3i> piece in pieces)
         {
-            if (piece == main) continue;
+            if (anyKept ? Keep(piece) : piece == main) continue;
             foreach (Vec3i v in piece) Voxels[v.X, v.Y, v.Z] = (byte)EnumWoodMaterial.Empty;
         }
     }

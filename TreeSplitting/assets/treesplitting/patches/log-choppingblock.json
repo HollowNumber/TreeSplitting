@@ -5,6 +5,7 @@
     "value": {
       "name": "treesplitting.makechoppingblock"
     },
-    "file": "game:blocktypes/wood/woodtyped/log.json"
+    "file": "game:blocktypes/wood/woodtyped/log.json",
+    "side": "Server"
   }
 ]

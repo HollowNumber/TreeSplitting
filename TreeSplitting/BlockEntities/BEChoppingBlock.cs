@@ -506,20 +506,28 @@ public class BEChoppingBlock : BlockEntity
 
         CheckIfFinished(byPlayer);
         // Only after the axe actually split something off, so a small carving doesn't turn into firewood on the next tap
-        if (Freeform && splitOff && tool == EnumTool.Axe) PopOffLastQuarter();
+        if (Freeform && splitOff && tool == EnumTool.Axe) PopOffRemainder();
         RegenSelectionBoxes();
         MarkDirty();
     }
 
-    // In freeform a quarter log or less left on the block is just firewood, so splitting a half down gets there too
-    private void PopOffLastQuarter()
+    // In freeform, once a split leaves half a log or less on the block that comes off too, same as the piece that fell:
+    // a half drops as a partly hewn log, a quarter as firewood. So a log splits into two halves and each half into two quarters
+    private void PopOffRemainder()
     {
         int wood = CountWood();
-        if (wood == 0 || wood * 4 > FullLogWood) return;
+        if (wood == 0 || wood * 2 > FullLogWood) return;
 
-        if (Api.Side == EnumAppSide.Server && wood * 8 >= FullLogWood)
+        if (Api.Side == EnumAppSide.Server)
         {
-            Api.World.SpawnItemEntity(Firewood(1), Pos.ToVec3d().Add(0.5, 1.2, 0.5));
+            List<Vec3i> rest = new();
+            for (int x = 0; x < 16; x++)
+            for (int y = 0; y < 16; y++)
+            for (int z = 0; z < 16; z++)
+            {
+                if (Voxels[x, y, z] != (byte)EnumWoodMaterial.Empty) rest.Add(new Vec3i(x, y, z));
+            }
+            DropPiece(rest);
         }
         ResetBlock();
     }

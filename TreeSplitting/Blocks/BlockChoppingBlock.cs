@@ -50,6 +50,7 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             interactions =
             [
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-pickrecipe", MouseButton = EnumMouseButton.Right },
+                new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-turn", MouseButton = EnumMouseButton.Right, Itemstacks = TurningTools(capi) },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
         }
@@ -65,13 +66,13 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 {
                     ActionLangCode = "treesplitting:blockhelp-choppingblock-turn",
                     MouseButton = EnumMouseButton.Right,
-                    Itemstacks = new[] { EnumTool.Axe, EnumTool.Saw, EnumTool.Knife, EnumTool.Chisel }.SelectMany(t => ObjectCacheUtil.GetToolStacks(capi, t)).ToArray()
+                    Itemstacks = TurningTools(capi)
                 },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
         }
 
-        // Tipping the log over works until the first cut
+        // Tipping the log over works until the first cut, or any time there is no recipe picked
         if (be.CanRotate)
         {
             interactions = interactions.Append(new WorldInteraction
@@ -84,6 +85,9 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
 
         return interactions.Append(base.GetPlacedBlockInteractionHelp(world, selection, forPlayer));
     }
+
+    private static ItemStack[] TurningTools(ICoreClientAPI capi) =>
+        new[] { EnumTool.Axe, EnumTool.Saw, EnumTool.Knife, EnumTool.Chisel }.SelectMany(t => ObjectCacheUtil.GetToolStacks(capi, t)).ToArray();
 
     // Every log that has at least one hewing recipe, worked out once
     private static ItemStack[] GetLogStacks(ICoreClientAPI capi)

@@ -290,10 +290,10 @@ public class BEChoppingBlock : BlockEntity
         return false;
     }
 
-    public bool CanRotate => WorkItemStack != null && !HasBeenCut;
+    // A cut log can only be tipped when it isn't being hewn into something, the recipe wouldn't line up anymore
+    public bool CanRotate => WorkItemStack != null && (!HasBeenCut || SelectedRecipe == null);
 
-    // Turning only makes sense once there's a recipe to line up, and it works any time after that
-    public bool CanTurn => WorkItemStack != null && SelectedRecipe != null;
+    public bool CanTurn => WorkItemStack != null;
 
     private static bool IsHoldingTurningTool(IPlayer byPlayer)
     {
@@ -331,11 +331,13 @@ public class BEChoppingBlock : BlockEntity
     {
         if (!CanRotate) return false;
 
+        // A cut log keeps its shape and just gets tipped over, a fresh one is made again
+        if (HasBeenCut) TipVoxels(!Horizontal);
         Horizontal = !Horizontal;
         Rotation = 0;
         SelectedRecipe = null;
         SelectedRecipeCode = null;
-        GenerateLogVoxels();
+        if (!HasBeenCut) GenerateLogVoxels();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/planks"), Pos.X, Pos.Y, Pos.Z, byPlayer);
         RegenSelectionBoxes();
@@ -344,10 +346,26 @@ public class BEChoppingBlock : BlockEntity
         if (Api.Side == EnumAppSide.Client)
         {
             dialog?.TryClose();
-            OpenRecipeDialog(byPlayer);
+            if (!HasBeenCut) OpenRecipeDialog(byPlayer);
         }
 
         return true;
+    }
+
+    // Grain up goes to along X when laying it down, and from along X or Z back up when standing it up
+    private void TipVoxels(bool toLying)
+    {
+        byte[,,] tipped = new byte[16, 16, 16];
+        int grain = GrainAxis;
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (toLying) tipped[y, 15 - x, z] = Voxels[x, y, z];
+            else if (grain == 0) tipped[15 - y, x, z] = Voxels[x, y, z];
+            else tipped[x, z, 15 - y] = Voxels[x, y, z];
+        }
+        Voxels = tipped;
     }
 
     private void OpenRecipeDialog(IPlayer player)

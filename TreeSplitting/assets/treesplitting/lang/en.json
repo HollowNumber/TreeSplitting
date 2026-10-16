@@ -39,8 +39,7 @@
   "blockdesc-debarkedhalflog-*": "Half of a split log. Put it on a chopping block and split it again for firewood.",
   "toolmode-sawmarks": "Saw Between Marks",
   "ingameerror-sawmarks-face": "Both marks need to be on the same face",
-  "blockhelp-sawmarks-first": "Mark the first corner",
-  "blockhelp-sawmarks-second": "Mark the opposite corner, on the same face",
-  "blockhelp-sawmarks-saw": "Hold to saw out everything between the marks",
-  "blockhelp-sawmarks-clear": "Clear the marks"
+  "sawmarks-hint-first": "Saw Between Marks: click one corner, then the opposite corner on the same face",
+  "sawmarks-hint-second": "First corner marked. Now click the opposite corner on the same face",
+  "sawmarks-hint-saw": "Hold to saw out everything between the marks. Sneak + click clears them"
 }

@@ -77,7 +77,12 @@ public class ItemHewnLog : Vintagestory.API.Common.Item
         }
 
         // Same shape and log means same mesh, so key the cache on that instead of storing an id on the stack like the anvil does
-        string key = "treesplitting-hewnlog-" + log.Collectible.Code + "-" + GrainAxis(itemstack) + "-" + Hash(itemstack.Attributes.GetBytes("voxels"));
+        string? key = itemstack.TempAttributes.GetString("meshKey");
+        if (key == null)
+        {
+            key = "treesplitting-hewnlog-" + log.Collectible.Code + "-" + GrainAxis(itemstack) + "-" + Hash(itemstack.Attributes.GetBytes("voxels"));
+            itemstack.TempAttributes.SetString("meshKey", key);
+        }
         int grainAxis = GrainAxis(itemstack);
 
         renderinfo.ModelRef = ObjectCacheUtil.GetOrCreate(capi, key, () =>

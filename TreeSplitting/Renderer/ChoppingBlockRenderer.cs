@@ -18,6 +18,9 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     private MeshRef? meshRef;
     private MeshRef? overlayMeshRef;
     private MeshRef? marksMeshRef;
+    private MeshRef? marksCornerMeshRef;
+    private SawMarks? sawMarks;
+    private byte[,,]? lastVoxels;
     private Matrixf ModelMat = new Matrixf();
     private Vec4f outlineColorMul = new Vec4f(1, 1, 1, 1);
     private readonly Vec3f origin = new Vec3f(0, 0, 0);
@@ -49,6 +52,8 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         float yStart = 10.0f;
         MeshData mesh = LogMesher.GenMesh(api, workItem, voxels, grainAxis, yStart);
+        lastVoxels = voxels;
+        if (sawMarks != null) SetSawMarks(sawMarks);
 
         if (meshRef != null) meshRef.Dispose();
         meshRef = api.Render.UploadMesh(mesh);
@@ -122,41 +127,67 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// The saw marks: the two corners bright, the cells between them faint. It's what the player picked, not a hit preview
+    /// The saw marks: the two corners bright, and every voxel the cut will take faint. It's what the player picked, not a hit preview
     /// </summary>
     public void SetSawMarks(SawMarks? marks)
     {
+        sawMarks = marks;
         marksMeshRef?.Dispose();
         marksMeshRef = null;
+        marksCornerMeshRef?.Dispose();
+        marksCornerMeshRef = null;
         if (marks == null) return;
 
-        MeshData mesh = new MeshData(24, 36, false, false, true, false);
-        mesh.SetMode(EnumDrawMode.Lines);
+        MeshData NewMesh()
+        {
+            MeshData m = new MeshData(24, 36, false, false, true, false);
+            m.SetMode(EnumDrawMode.Lines);
+            return m;
+        }
 
-        void AddCube(Vec3i v, int color)
+        // A hair bigger than the voxel so the lines don't fight the wood for the same spot
+        void AddCube(MeshData mesh, Vec3i v, int color, float grow)
         {
             MeshData cube = LineMeshUtil.GetCube(color);
+            float half = (1 + grow) / 32f;
             for (int i = 0; i < cube.xyz.Length; i += 3)
             {
-                cube.xyz[i] = cube.xyz[i] / 32f + 1 / 32f + v.X / 16f;
-                cube.xyz[i + 1] = cube.xyz[i + 1] / 32f + 1 / 32f + (v.Y + 10f) / 16f;
-                cube.xyz[i + 2] = cube.xyz[i + 2] / 32f + 1 / 32f + v.Z / 16f;
+                cube.xyz[i] = cube.xyz[i] * half + (v.X + 0.5f) / 16f;
+                cube.xyz[i + 1] = cube.xyz[i + 1] * half + (v.Y + 10.5f) / 16f;
+                cube.xyz[i + 2] = cube.xyz[i + 2] * half + (v.Z + 0.5f) / 16f;
             }
             mesh.AddMeshData(cube);
         }
 
-        int faint = ColorUtil.ToRgba(140, 120, 200, 255);
-        int bright = ColorUtil.ToRgba(255, 255, 255, 255);
-        foreach (Vec3i cell in marks.FaceCells()) AddCube(cell, faint);
-        AddCube(marks.A, bright);
-        AddCube(marks.B, bright);
+        MeshData affected = NewMesh();
+        int faint = ColorUtil.ToRgba(160, 120, 200, 255);
+        if (lastVoxels != null)
+        {
+            byte[,,] voxels = lastVoxels;
+            bool Wood(int x, int y, int z) => x is >= 0 and < 16 && y is >= 0 and < 16 && z is >= 0 and < 16 && voxels[x, y, z] != 0;
 
-        marksMeshRef = api.Render.UploadMesh(mesh);
+            foreach (Vec3i cell in marks.FaceCells())
+            foreach (Vec3i v in marks.Column(cell))
+            {
+                if (!Wood(v.X, v.Y, v.Z)) continue;
+                // Only the ones that can be seen
+                if (Wood(v.X + 1, v.Y, v.Z) && Wood(v.X - 1, v.Y, v.Z) && Wood(v.X, v.Y + 1, v.Z) && Wood(v.X, v.Y - 1, v.Z) &&
+                    Wood(v.X, v.Y, v.Z + 1) && Wood(v.X, v.Y, v.Z - 1)) continue;
+                AddCube(affected, v, faint, 0.06f);
+            }
+        }
+        if (affected.VerticesCount > 0) marksMeshRef = api.Render.UploadMesh(affected);
+
+        MeshData corners = NewMesh();
+        int bright = ColorUtil.ToRgba(255, 255, 255, 255);
+        AddCube(corners, marks.A, bright, 0.1f);
+        AddCube(corners, marks.B, bright, 0.1f);
+        marksCornerMeshRef = api.Render.UploadMesh(corners);
     }
 
     private void RenderRecipeOutline()
     {
-        if ((overlayMeshRef == null && marksMeshRef == null) || api.HideGuis) return;
+        if ((overlayMeshRef == null && marksCornerMeshRef == null) || api.HideGuis) return;
 
         // Only show it when holding a tool that works on the log, like clay forming does with clay
         EnumTool? tool = api.World.Player?.InventoryManager?.ActiveHotbarSlot?.Itemstack?.Collectible?.Tool;
@@ -183,11 +214,12 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
 
         prog.Uniform("colorIn", outlineColorMul);
         if (overlayMeshRef != null) rpi.RenderMesh(overlayMeshRef);
-        if (marksMeshRef != null)
+        if (marksMeshRef != null) rpi.RenderMesh(marksMeshRef);
+        if (marksCornerMeshRef != null)
         {
-            // The marks sit right on the wood and got lost in it, draw them on top so they show before anything's cut
+            // The corners always show, even through the log
             rpi.GLDisableDepthTest();
-            rpi.RenderMesh(marksMeshRef);
+            rpi.RenderMesh(marksCornerMeshRef);
             rpi.GLEnableDepthTest();
         }
         prog.Stop();
@@ -231,5 +263,6 @@ public class WoodWorkItemRenderer : IRenderer, IDisposable
         meshRef?.Dispose();
         overlayMeshRef?.Dispose();
         marksMeshRef?.Dispose();
+        marksCornerMeshRef?.Dispose();
     }
 }

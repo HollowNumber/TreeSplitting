@@ -689,6 +689,7 @@ public class BEChoppingBlock : BlockEntity
         {
             if (marks.ColumnEmpty(Voxels, cell)) continue;
             marks.CutColumn(Voxels, cell);
+            SpawnSawdust(cell, marks.Face);
             if (--steps == 0) break;
         }
 
@@ -697,6 +698,19 @@ public class BEChoppingBlock : BlockEntity
             sawJobs.Remove(byPlayer.PlayerUID);
             TellSawMarksGone(byPlayer.PlayerUID);
         }
+    }
+
+    private static readonly SimpleParticleProperties Sawdust = new(
+        2, 4, ColorUtil.ToRgba(220, 225, 205, 160), new Vec3d(), new Vec3d(1 / 16.0, 1 / 16.0, 1 / 16.0),
+        new Vec3f(-0.3f, 0.1f, -0.3f), new Vec3f(0.3f, 0.5f, 0.3f), 0.8f, 0.2f, 0.05f, 0.12f, EnumParticleModel.Cube);
+
+    // Fine pale dust out of the kerf, a lot finer than the axe chips
+    private void SpawnSawdust(Vec3i cell, BlockFacing face)
+    {
+        if (Api.Side != EnumAppSide.Server) return;
+        Sawdust.MinPos.Set(Pos.X + (cell.X + face.Normali.X * 0.6) / 16.0, Pos.Y + (cell.Y + 10 + face.Normali.Y * 0.6) / 16.0,
+            Pos.Z + (cell.Z + face.Normali.Z * 0.6) / 16.0);
+        Api.World.SpawnParticles(Sawdust);
     }
 
     // The log moved or went away, so nobody's marks line up anymore
@@ -713,14 +727,7 @@ public class BEChoppingBlock : BlockEntity
     }
 
     // Client side, the marks this player set get drawn on the log
-    public void ShowSawMarks(SawMarks? marks, int stage = 0)
-    {
-        SawMarkStage = marks == null ? 0 : stage;
-        renderer?.SetSawMarks(marks);
-    }
-
-    // Client side, for the hints: 0 no marks, 1 the first corner is set, 2 both are
-    public int SawMarkStage { get; private set; }
+    public void ShowSawMarks(SawMarks? marks) => renderer?.SetSawMarks(marks);
 
     private void HandleSawSideways(Vec3i voxelPos, IPlayer byPlayer)
     {

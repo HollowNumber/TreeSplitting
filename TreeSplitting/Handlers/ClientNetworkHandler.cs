@@ -94,6 +94,12 @@ public class ClientNetworkHandler
 
     private void OnTick(float dt)
     {
+        if (_markPos != null)
+        {
+            ItemStack? saw = _capi.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack;
+            if (saw?.Collectible?.Tool != EnumTool.Saw || saw.Attributes.GetInt("toolMode") != (int)EnumSawToolModes.SawBetweenMarks) ClearMarks(true);
+        }
+
         if (!_holding) return;
 
         // Let go, or tabbed into a menu
@@ -178,6 +184,7 @@ public class ClientNetworkHandler
             if (_marks == null)
             {
                 if (!fresh) return SwingResult.Blocked;
+                if (_markA == null) _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-first"));
                 return SetMark(be, pos, voxel, sel.Face);
             }
         }
@@ -226,7 +233,8 @@ public class ClientNetworkHandler
             _markPos = pos.Copy();
             _markA = voxel;
             _markFace = face.Index;
-            be.ShowSawMarks(new SawMarks(voxel, voxel, face), 1);
+            be.ShowSawMarks(new SawMarks(voxel, voxel, face));
+            _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-second"));
             return SwingResult.Blocked;
         }
 
@@ -237,7 +245,8 @@ public class ClientNetworkHandler
         }
 
         _marks = new SawMarks(_markA, voxel, face);
-        be.ShowSawMarks(_marks, 2);
+        be.ShowSawMarks(_marks);
+        _capi.TriggerIngameDiscovery(this, "sawmarks", Lang.Get("treesplitting:sawmarks-hint-saw"));
         _channel.SendPacket(new SawMarksPacket
         {
             Pos = pos, FaceIndex = face.Index,

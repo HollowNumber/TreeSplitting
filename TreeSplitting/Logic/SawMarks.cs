@@ -62,9 +62,17 @@ public record SawMarks(Vec3i A, Vec3i B, BlockFacing Face)
             (Air(V, v1 - 1, u1, u2), c => Get(c, V)),
             (Air(V, v2 + 1, u1, u2), c => -Get(c, V)),
         };
-        var start = edges.MaxBy(e => e.air);
+        // Sawing on a side of the log always goes from the top down, like a real saw cut
+        if (Normal != 1) return FaceCells().OrderBy(c => -c.Y).ToList();
 
+        var start = edges.MaxBy(e => e.air);
         return FaceCells().OrderBy(start.key).ToList();
+    }
+
+    // Every voxel behind a cell, all the way through the log
+    public IEnumerable<Vec3i> Column(Vec3i cell)
+    {
+        for (int n = 0; n < 16; n++) yield return Make(U, Get(cell, U), V, Get(cell, V), Normal, n);
     }
 
     public bool ColumnEmpty(byte[,,] voxels, Vec3i cell)

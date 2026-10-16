@@ -6,7 +6,6 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 using TreeSplitting.BlockEntities;
-using TreeSplitting.Enums;
 
 namespace TreeSplitting.Blocks;
 
@@ -72,24 +71,6 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
             ];
         }
 
-        // Saw between marks gets told what the next click does
-        ItemStack? held = forPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
-        if (be.WorkItemStack != null && held?.Collectible?.Tool == EnumTool.Saw &&
-            held.Attributes.GetInt("toolMode") == (int)EnumSawToolModes.SawBetweenMarks)
-        {
-            string step = be.SawMarkStage switch
-            {
-                0 => "treesplitting:blockhelp-sawmarks-first",
-                1 => "treesplitting:blockhelp-sawmarks-second",
-                _ => "treesplitting:blockhelp-sawmarks-saw"
-            };
-            interactions = new[] { new WorldInteraction { ActionLangCode = step, MouseButton = EnumMouseButton.Left } }
-                .Append(be.SawMarkStage > 0
-                    ? [new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-sawmarks-clear", MouseButton = EnumMouseButton.Left, HotKeyCode = "shift" }]
-                    : [])
-                .Append(interactions);
-        }
-
         if (be.Freeform)
         {
             interactions = interactions.Append(new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-switchrecipe", MouseButton = EnumMouseButton.Right });
@@ -142,15 +123,8 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     {
         BEChoppingBlock? be = blockAccessor.GetBlockEntity(pos) as BEChoppingBlock;
 
-        if (be is { SelectionBoxes.Length: > 0 })
-        {
-            Cuboidf[] combinedBoxes = (Cuboidf[])be.SelectionBoxes.Clone();
-            Cuboidf[] stumpBoxes = base.GetSelectionBoxes(blockAccessor, pos);
-
-            combinedBoxes[0] = stumpBoxes.Length > 0 ? stumpBoxes[0] : Cuboidf.Default();
-
-            return combinedBoxes;
-        }
+        // Gets asked many times a frame, so hand back the array as is. The first box is already the stump
+        if (be is { SelectionBoxes.Length: > 0 }) return be.SelectionBoxes;
 
         return base.GetSelectionBoxes(blockAccessor, pos);
     }

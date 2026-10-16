@@ -713,7 +713,14 @@ public class BEChoppingBlock : BlockEntity
     }
 
     // Client side, the marks this player set get drawn on the log
-    public void ShowSawMarks(SawMarks? marks) => renderer?.SetSawMarks(marks);
+    public void ShowSawMarks(SawMarks? marks, int stage = 0)
+    {
+        SawMarkStage = marks == null ? 0 : stage;
+        renderer?.SetSawMarks(marks);
+    }
+
+    // Client side, for the hints: 0 no marks, 1 the first corner is set, 2 both are
+    public int SawMarkStage { get; private set; }
 
     private void HandleSawSideways(Vec3i voxelPos, IPlayer byPlayer)
     {

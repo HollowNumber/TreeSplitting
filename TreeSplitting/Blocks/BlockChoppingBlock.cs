@@ -6,6 +6,7 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 using TreeSplitting.BlockEntities;
+using TreeSplitting.Enums;
 
 namespace TreeSplitting.Blocks;
 
@@ -69,6 +70,24 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
                 },
                 new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-choppingblock-take", MouseButton = EnumMouseButton.Right, HotKeyCode = "shift" }
             ];
+        }
+
+        // Saw between marks gets told what the next click does
+        ItemStack? held = forPlayer.InventoryManager.ActiveHotbarSlot.Itemstack;
+        if (be.WorkItemStack != null && held?.Collectible?.Tool == EnumTool.Saw &&
+            held.Attributes.GetInt("toolMode") == (int)EnumSawToolModes.SawBetweenMarks)
+        {
+            string step = be.SawMarkStage switch
+            {
+                0 => "treesplitting:blockhelp-sawmarks-first",
+                1 => "treesplitting:blockhelp-sawmarks-second",
+                _ => "treesplitting:blockhelp-sawmarks-saw"
+            };
+            interactions = new[] { new WorldInteraction { ActionLangCode = step, MouseButton = EnumMouseButton.Left } }
+                .Append(be.SawMarkStage > 0
+                    ? [new WorldInteraction { ActionLangCode = "treesplitting:blockhelp-sawmarks-clear", MouseButton = EnumMouseButton.Left, HotKeyCode = "shift" }]
+                    : [])
+                .Append(interactions);
         }
 
         if (be.Freeform)

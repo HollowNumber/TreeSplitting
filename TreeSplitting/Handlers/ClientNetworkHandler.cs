@@ -226,7 +226,7 @@ public class ClientNetworkHandler
             _markPos = pos.Copy();
             _markA = voxel;
             _markFace = face.Index;
-            be.ShowSawMarks(new SawMarks(voxel, voxel, face));
+            be.ShowSawMarks(new SawMarks(voxel, voxel, face), 1);
             return SwingResult.Blocked;
         }
 
@@ -237,7 +237,7 @@ public class ClientNetworkHandler
         }
 
         _marks = new SawMarks(_markA, voxel, face);
-        be.ShowSawMarks(_marks);
+        be.ShowSawMarks(_marks, 2);
         _channel.SendPacket(new SawMarksPacket
         {
             Pos = pos, FaceIndex = face.Index,

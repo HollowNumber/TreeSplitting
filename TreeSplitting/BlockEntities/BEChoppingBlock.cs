@@ -675,7 +675,8 @@ public class BEChoppingBlock : BlockEntity
 
     public void SetSawMarks(IPlayer player, SawMarks? marks)
     {
-        if (marks == null) sawJobs.Remove(player.PlayerUID);
+        // Same open edge rule the client checks
+        if (marks == null || !marks.StartsAtOpenEdge(Voxels)) sawJobs.Remove(player.PlayerUID);
         else sawJobs[player.PlayerUID] = marks;
     }
 

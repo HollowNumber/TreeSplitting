@@ -243,7 +243,14 @@ public class ClientNetworkHandler
             return SwingResult.Blocked;
         }
 
-        _marks = new SawMarks(_markA, voxel, face);
+        SawMarks marks = new SawMarks(_markA, voxel, face);
+        if (!marks.StartsAtOpenEdge(be.Voxels))
+        {
+            _capi.TriggerIngameError(this, "sawmarksopen", Lang.Get("treesplitting:ingameerror-sawmarks-open"));
+            return SwingResult.Blocked;
+        }
+
+        _marks = marks;
         be.ShowSawMarks(_marks);
         _capi.TriggerIngameError(this, "sawmarks-saw", Lang.Get("treesplitting:sawmarks-hint-saw"));
         _channel.SendPacket(new SawMarksPacket

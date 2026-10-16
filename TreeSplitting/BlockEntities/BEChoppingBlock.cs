@@ -505,8 +505,22 @@ public class BEChoppingBlock : BlockEntity
         }
 
         CheckIfFinished(byPlayer);
+        if (Freeform) PopOffLastQuarter();
         RegenSelectionBoxes();
         MarkDirty();
+    }
+
+    // In freeform a quarter log or less left on the block is just firewood, so splitting a half down gets there too
+    private void PopOffLastQuarter()
+    {
+        int wood = CountWood();
+        if (wood == 0 || wood * 4 > FullLogWood) return;
+
+        if (Api.Side == EnumAppSide.Server && wood * 8 >= FullLogWood)
+        {
+            Api.World.SpawnItemEntity(Firewood(1), Pos.ToVec3d().Add(0.5, 1.2, 0.5));
+        }
+        ResetBlock();
     }
 
     // Only wears the tool when something actually gets cut

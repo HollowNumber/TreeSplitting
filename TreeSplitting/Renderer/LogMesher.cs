@@ -29,18 +29,23 @@ public static class LogMesher
         else
             texSource = capi.Tesselator.GetTextureSource((Vintagestory.API.Common.Item)collectible);
 
-        // Retrieve Top texture (for UP/DOWN faces - end grain/rings)
-        TextureAtlasPosition topTex = texSource["up"] ?? texSource["top"];
-        if (topTex == null) topTex = texSource["all"] ?? texSource["base"] ?? texSource["texture"];
-        if (topTex == null) topTex = capi.BlockTextureAtlas.UnknownTexturePosition;
+        // A missing key can come back as the unknown texture instead of null, so skip that too and try the next one
+        TextureAtlasPosition unknown = capi.BlockTextureAtlas.UnknownTexturePosition;
+        TextureAtlasPosition? Pick(params string[] keys)
+        {
+            foreach (string key in keys)
+            {
+                TextureAtlasPosition? tex = texSource[key];
+                if (tex != null && tex != unknown) return tex;
+            }
+            return null;
+        }
 
-        // Retrieve Side/Bark texture for the outermost Bark voxels
-        // The block's texSource should have the side texture mapped to directional keys
-        TextureAtlasPosition sideTex = texSource["north"] ?? texSource["south"] ?? texSource["east"] ?? texSource["west"];
-        if (sideTex == null) sideTex = texSource["side"] ?? texSource["bark"];
-        if (sideTex == null) sideTex = texSource["all"] ?? texSource["base"] ?? texSource["texture"];
-        // Final fallback - use topTex (wood grain) if no side texture found
-        if (sideTex == null) sideTex = topTex;
+        // End grain with the rings for the ends of the log
+        TextureAtlasPosition topTex = Pick("up", "top", "end", "all", "base", "texture") ?? unknown;
+
+        // Bark for the outside. Logs have it on the sides, the half log calls it bark
+        TextureAtlasPosition sideTex = Pick("bark", "north", "south", "east", "west", "side", "all", "base", "texture") ?? topTex;
 
         // Grain runs up (Y) for a standing log, along X for one lying down.
         // a and b are the axes across the log, the end grain texture is mapped u = a, v = b

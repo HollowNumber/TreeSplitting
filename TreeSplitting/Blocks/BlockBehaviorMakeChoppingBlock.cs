@@ -61,7 +61,12 @@ public class BlockBehaviorMakeChoppingBlock : BlockBehavior
         handling = EnumHandling.PreventDefault;
 
         int swing = (int)(secondsUsed / SwingInterval(world));
-        if (swing >= Swings) return false;
+        if (swing >= Swings)
+        {
+            // The log turns into the chopping block before the stop gets here, so stop swinging now
+            if (world.Side == EnumAppSide.Client) byPlayer.Entity.StopAnimation("axechop");
+            return false;
+        }
 
         if (swing > lastSwing[byPlayer.PlayerUID])
         {

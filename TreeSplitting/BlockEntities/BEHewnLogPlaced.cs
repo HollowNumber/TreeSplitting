@@ -58,9 +58,10 @@ public class BEHewnLogPlaced : BlockEntity
             if (voxels == null || log?.Collectible == null) return base.OnTesselation(mesher, tessThreadTesselator);
             mesh = LogMesher.GenMesh(capi, log, voxels, ItemHewnLog.GrainAxis(Piece), 0);
 
-            // The chunk mesher wants a colour map and render pass for every face or it just doesn't draw them
+            // The chunk mesher wants these for every face or it doesn't draw them
             for (int i = 0; i < mesh.VerticesCount / 4; i++)
             {
+                mesh.AddXyzFace(0);
                 mesh.AddColorMapIndex(0, 0);
                 mesh.AddRenderPass((short)EnumChunkRenderPass.Opaque);
             }

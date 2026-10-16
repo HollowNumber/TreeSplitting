@@ -100,13 +100,15 @@ public static class LogMesher
         float[] cornerU = new float[4];
         float[] cornerV = new float[4];
 
-        // Corners in voxel units, (0,0) (1,0) (1,1) (0,1) across the face. Culling is off so winding doesn't matter
+        // Corners in voxel units, (0,0) (1,0) (1,1) (0,1) across the face, counter clockwise seen from outside.
+        // Faces looking the negative way go round the other way, the world culls back faces even if the chopping block doesn't
         for (int i = 0; i < 4; i++)
         {
             float[] c = corners[i];
+            int k = positive ? i : (4 - i) % 4;
             c[normal] = voxel[normal] + (positive ? 1 : 0);
-            c[t1] = voxel[t1] + (i is 1 or 2 ? 1 : 0);
-            c[t2] = voxel[t2] + (i is 2 or 3 ? 1 : 0);
+            c[t1] = voxel[t1] + (k is 1 or 2 ? 1 : 0);
+            c[t2] = voxel[t2] + (k is 2 or 3 ? 1 : 0);
         }
 
         TextureAtlasPosition tex;

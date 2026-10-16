@@ -10,6 +10,7 @@ using TreeSplitting.Recipes;
 using TreeSplitting.Rendering;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using TreeSplitting.Config;
@@ -223,10 +224,34 @@ public class BEChoppingBlock : BlockEntity
         RegenSelectionBoxes();
     }
 
+    // A cut log can only go for recipes that don't need wood that's already gone
+    private bool HasWoodFor(HewingRecipe recipe)
+    {
+        if (!HasBeenCut || recipe.Voxels == null) return true;
+
+        bool[,,] target = recipe.Voxels;
+        for (int i = 0; i < Rotation; i++) target = RotateCw(target);
+
+        for (int x = 0; x < 16; x++)
+        for (int y = 0; y < 16; y++)
+        for (int z = 0; z < 16; z++)
+        {
+            if (target[x, y, z] && IsInLog(x, y, z) && Voxels[x, y, z] == (byte)EnumWoodMaterial.Empty) return false;
+        }
+        return true;
+    }
+
     public void SetSelectedRecipe(AssetLocation code)
     {
         SelectedRecipeCode = code;
         SelectedRecipe = FindRecipe(Api, SelectedRecipeCode);
+        // Same check as the picker, in case it gets asked for one it didn't show
+        if (SelectedRecipe != null && !HasWoodFor(SelectedRecipe))
+        {
+            SelectedRecipe = null;
+            SelectedRecipeCode = null;
+            return;
+        }
         if (SelectedRecipe != null)
         {
             // The picker only shows recipes for how the log sits, this is just in case
@@ -335,7 +360,7 @@ public class BEChoppingBlock : BlockEntity
 
         foreach (var recipe in TreeSplittingModSystem.GetRecipes(Api))
         {
-            if (recipe.Horizontal == Horizontal && recipe.Matches(Api.World, WorkItemStack))
+            if (recipe.Horizontal == Horizontal && recipe.Matches(Api.World, WorkItemStack) && HasWoodFor(recipe))
             {
                 ItemStack outStack = recipe.GenerateOutput(WorkItemStack, Api.World);
 
@@ -347,7 +372,11 @@ public class BEChoppingBlock : BlockEntity
             }
         }
 
-        if (matching.Count == 0) return;
+        if (matching.Count == 0)
+        {
+            if (HasBeenCut) capi.TriggerIngameError(this, "nowoodleft", Lang.Get("treesplitting:ingameerror-hewnlog-nowood"));
+            return;
+        }
 
         if (dialog?.IsOpened() == true) dialog.TryClose();
 

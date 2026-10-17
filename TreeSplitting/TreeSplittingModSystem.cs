@@ -168,7 +168,11 @@ public class TreeSplittingModSystem : ModSystem
     {
         base.StartClientSide(api);
 
-        api.Event.LevelFinalize += () => api.Logger.Notification("Received {0} tree splitting recipes from the server", Recipes.Count);
+        api.Event.LevelFinalize += () =>
+        {
+            api.Logger.Notification("Received {0} tree splitting recipes from the server", Recipes.Count);
+            BlockChoppingBlock.GetLogStacks(api);
+        };
 
         _clientNetworkHandler = new ClientNetworkHandler(api);
     }

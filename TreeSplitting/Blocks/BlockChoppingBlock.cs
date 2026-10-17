@@ -93,8 +93,9 @@ public class BlockChoppingBlock : Block, IMultiBlockColSelBoxes, IMultiBlockInte
     private static ItemStack[] TurningTools(ICoreClientAPI capi) =>
         new[] { EnumTool.Axe, EnumTool.Saw, EnumTool.Knife, EnumTool.Chisel }.SelectMany(t => ObjectCacheUtil.GetToolStacks(capi, t)).ToArray();
 
-    // Every log that has at least one hewing recipe, worked out once
-    private static ItemStack[] GetLogStacks(ICoreClientAPI capi)
+    // Every log that has at least one hewing recipe, worked out once. Goes through every block, so it's done while the
+    // world loads instead of the first time someone looks at an empty chopping block
+    internal static ItemStack[] GetLogStacks(ICoreClientAPI capi)
     {
         return ObjectCacheUtil.GetOrCreate(capi, "treesplittingLogStacks", () =>
         {

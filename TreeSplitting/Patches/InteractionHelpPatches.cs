@@ -9,7 +9,7 @@ namespace TreeSplitting.Patches;
 
 /// <summary>
 ///     The hint box in the corner rebuilds every time the looked at selection box changes. Every voxel of the log is its own
-///     box, so sweeping across the log rebuilt it about 30 times a second at ~10 ms each, that was the stutter. Our hints
+///     box, so sweeping across the log rebuilt it about 30 times a second at ~10 ms each. Hints
 ///     don't depend on which voxel it is, only on the log, so it only rebuilds when that changes.
 /// </summary>
 [HarmonyPatchCategory("treesplitting")]

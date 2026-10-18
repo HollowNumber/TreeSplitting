@@ -10,6 +10,12 @@ Versions follow [semver](https://semver.org).
 
 ### Removed
 
+## [0.2.1]
+
+### Fixed
+- Stutter looking at a log on the chopping block, the hint box rebuilt for every voxel the crosshair crossed
+- Stutter holding a partly hewn log, and a short freeze the first time an empty chopping block got looked at
+
 ## [0.2.0] - 2026-10-16
 
 ### Added
